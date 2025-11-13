@@ -1,0 +1,66 @@
+{
+  "aforos": [
+    {
+      "id": "aforo_001",
+      "nombre": "GX010322 - Intersección Principal",
+      "video_source": "GX010322.MP4",
+      "tracks_file": "output_gx010322/trajectories/Gx010322_tracks.json",
+      "offset_x": 0,
+      "offset_y": 0,
+      "activo": true,
+      "color_tema": "#3498db",
+      "descripcion": "Primer aforo - Intersección principal con alto flujo vehicular"
+    },
+    {
+      "id": "aforo_002",
+      "nombre": "GX020322 - Intersección Secundaria",
+      "video_source": "GX020322.MP4",
+      "tracks_file": "output_gx020322/trajectories/Gx020322_tracks.json",
+      "offset_x": 1500,
+      "offset_y": 0,
+      "activo": true,
+      "color_tema": "#e74c3c",
+      "descripcion": "Segundo aforo - Intersección secundaria con flujo vehicular"
+    },
+    {
+      "id": "aforo_003",
+      "nombre": "Intersección Sur",
+      "video_source": "PENDIENTE.MP4",
+      "tracks_file": "output_aforo_003/trajectories/tracks.json",
+      "offset_x": 0,
+      "offset_y": 1000,
+      "activo": false,
+      "color_tema": "#2ecc71",
+      "descripcion": "Tercer aforo - Intersección sur (pendiente de procesar)"
+    },
+    {
+      "id": "aforo_004",
+      "nombre": "Intersección Este",
+      "video_source": "PENDIENTE.MP4",
+      "tracks_file": "output_aforo_004/trajectories/tracks.json",
+      "offset_x": 1500,
+      "offset_y": 1000,
+      "activo": false,
+      "color_tema": "#9b59b6",
+      "descripcion": "Cuarto aforo - Intersección este (pendiente de procesar)"
+    }
+  ],
+  "configuracion_global": {
+    "base_de_datos": {
+      "host": "localhost",
+      "puerto": 5432,
+      "nombre_db": "bogota_traffic",
+      "usuario": "postgres",
+      "password": "bogota_traffic_2024_secure"
+    },
+    "canvas": {
+      "ancho_default": 3000,
+      "alto_default": 2000,
+      "fondo": "#1a1a1a"
+    },
+    "sync_temporal": {
+      "sincronizar_frames": true,
+      "frame_offset": 0
+    }
+  }
+}

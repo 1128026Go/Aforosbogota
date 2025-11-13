@@ -1,0 +1,37 @@
+{
+  "_comentario": "Archivo de ejemplo - Define manualmente las zonas de cada acceso (N, S, O, E)",
+  "_instrucciones": [
+    "1. Identifica en tu video qué zona corresponde a cada acceso cardinal",
+    "2. Define polígonos (4+ puntos) que cubran el área donde aparecen vehículos de ese acceso",
+    "3. Las coordenadas son píxeles (x, y) del video",
+    "4. Norte, Sur, Este, Oeste son GEOGRÁFICOS, no de la imagen"
+  ],
+
+  "norte": [
+    [400, 100],
+    [600, 100],
+    [600, 450],
+    [400, 450]
+  ],
+
+  "sur": [
+    [400, 550],
+    [600, 550],
+    [600, 900],
+    [400, 900]
+  ],
+
+  "este": [
+    [650, 400],
+    [1000, 400],
+    [1000, 600],
+    [650, 600]
+  ],
+
+  "oeste": [
+    [0, 400],
+    [350, 400],
+    [350, 600],
+    [0, 600]
+  ]
+}

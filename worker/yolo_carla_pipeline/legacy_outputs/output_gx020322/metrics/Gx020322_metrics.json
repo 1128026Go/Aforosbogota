@@ -1,0 +1,69 @@
+{
+  "metadata": {
+    "video": "Gx020322.mp4",
+    "fps": 29.97002997002997,
+    "width": 1280,
+    "height": 720,
+    "total_frames": 70896,
+    "frames_procesados": 70896,
+    "tiempo_segundos": 1047.646549463272,
+    "modelo": "yolov8s",
+    "resolucion": 480,
+    "confianza": 0.5,
+    "timestamp": "2025-10-29T16:16:13.285017"
+  },
+  "metrics": {
+    "total_vehicles": 1684,
+    "vehicles_by_class": {
+      "car": 886,
+      "motorcycle": 584,
+      "person": 167,
+      "truck": 29,
+      "bicycle": 7,
+      "bus": 2,
+      "tv": 2,
+      "backpack": 1,
+      "umbrella": 1,
+      "fire hydrant": 4,
+      "dog": 1
+    },
+    "avg_velocity_px": 4.191446341513652,
+    "max_velocity_px": 26.61488722918476,
+    "velocity_distribution": {
+      "car": 2.6040915542358865,
+      "motorcycle": 6.22694835250529,
+      "person": 5.622722170042382,
+      "truck": 4.494255253136902,
+      "bicycle": 3.6998567308487478,
+      "bus": 4.118435500311139,
+      "tv": 0.1260511355283095,
+      "backpack": 5.2790706509262915,
+      "umbrella": 2.0833333333333335,
+      "fire hydrant": 0.4836186224982102,
+      "dog": 1.619830592985717
+    },
+    "direction_distribution": {
+      "northeast": 51,
+      "stationary": 354,
+      "west": 569,
+      "east": 566,
+      "southeast": 45,
+      "southwest": 24,
+      "south": 54,
+      "northwest": 15,
+      "north": 6
+    },
+    "turn_patterns": {
+      "straight": 1521,
+      "complex": 38,
+      "u_turn": 125
+    },
+    "congestion_score": 0.03684004512905528,
+    "avg_track_density": 0.0018272569444444445,
+    "roi_counts": {
+      "center_intersection": 7,
+      "north_entry": 1,
+      "south_exit": 12
+    }
+  }
+}

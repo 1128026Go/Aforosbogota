@@ -1,0 +1,15 @@
+{
+  "pixels_per_meter": 20.0,
+  "origin_lat": 4.6097,
+  "origin_lon": -74.0817,
+  "corner_lat": 4.6085,
+  "corner_lon": -74.0805,
+  "frame_width": 1280,
+  "frame_height": 720,
+  "carla_origin_x": 0.0,
+  "carla_origin_y": 0.0,
+  "carla_origin_z": 0.5,
+  "carla_scale": 0.05,
+  "carla_rotation": 0.0,
+  "flip_y": true
+}

@@ -1,0 +1,73 @@
+{
+  "metadata": {
+    "video": "Gx010323.mp4",
+    "fps": 29.97002997002997,
+    "width": 1280,
+    "height": 720,
+    "total_frames": 108372,
+    "frames_procesados": 108372,
+    "tiempo_segundos": 1519.067039012909,
+    "modelo": "yolov8s",
+    "resolucion": 480,
+    "confianza": 0.5,
+    "timestamp": "2025-10-29T15:58:20.233407"
+  },
+  "metrics": {
+    "total_vehicles": 2404,
+    "vehicles_by_class": {
+      "car": 1415,
+      "motorcycle": 387,
+      "person": 266,
+      "bus": 301,
+      "sports ball": 3,
+      "frisbee": 1,
+      "fire hydrant": 4,
+      "truck": 18,
+      "bicycle": 3,
+      "backpack": 1,
+      "dog": 4,
+      "bench": 1
+    },
+    "avg_velocity_px": 3.530070532381062,
+    "max_velocity_px": 36.29088261216626,
+    "velocity_distribution": {
+      "car": 3.4516525579356627,
+      "motorcycle": 6.406735507485356,
+      "person": 2.6776342928772396,
+      "bus": 0.9844916129191259,
+      "sports ball": 0.030993054269470854,
+      "frisbee": 0.07417134816685544,
+      "fire hydrant": 1.2449945086619334,
+      "truck": 4.003196029265253,
+      "bicycle": 8.705825622259997,
+      "backpack": 5.290133287931566,
+      "dog": 1.248227130764704,
+      "bench": 0.6066758241067098
+    },
+    "direction_distribution": {
+      "west": 600,
+      "stationary": 670,
+      "east": 812,
+      "northwest": 24,
+      "southwest": 60,
+      "south": 117,
+      "north": 14,
+      "southeast": 44,
+      "northeast": 63
+    },
+    "turn_patterns": {
+      "straight": 1959,
+      "u_turn": 320,
+      "complex": 117,
+      "right": 3,
+      "left": 5
+    },
+    "congestion_score": 1.0,
+    "avg_track_density": 0.0026085069444444445,
+    "roi_counts": {
+      "center_intersection": 17,
+      "north_entry": 2,
+      "south_exit": 17
+    }
+  }
+}

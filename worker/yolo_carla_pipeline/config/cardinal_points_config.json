@@ -1,0 +1,122 @@
+{
+  "descripcion": "Configuración de puntos cardinales para zonas de acceso",
+  "fecha_configuracion": "2025-11-07",
+  "puntos_cardinales": {
+    "norte": {
+      "descripcion": "Accesos desde el norte",
+      "zonas": [
+        {
+          "numero": 5,
+          "coordenadas": {"x": 925, "y": 125},
+          "accesos": 205
+        }
+      ],
+      "total_accesos": 205
+    },
+    "sur": {
+      "descripcion": "Accesos desde el sur",
+      "zonas": [
+        {
+          "numero": 2,
+          "coordenadas": {"x": 1525, "y": 225},
+          "accesos": 242
+        },
+        {
+          "numero": 4,
+          "coordenadas": {"x": 1525, "y": 275},
+          "accesos": 215
+        },
+        {
+          "numero": 8,
+          "coordenadas": {"x": 125, "y": 175},
+          "accesos": 136
+        },
+        {
+          "numero": 15,
+          "coordenadas": {"x": 25, "y": 275},
+          "accesos": 97
+        }
+      ],
+      "total_accesos": 690
+    },
+    "este": {
+      "descripcion": "Accesos desde el este",
+      "zonas": [
+        {
+          "numero": 1,
+          "coordenadas": {"x": 2725, "y": 225},
+          "accesos": 267
+        },
+        {
+          "numero": 3,
+          "coordenadas": {"x": 2725, "y": 275},
+          "accesos": 216
+        },
+        {
+          "numero": 7,
+          "coordenadas": {"x": 1225, "y": 225},
+          "accesos": 171
+        },
+        {
+          "numero": 10,
+          "coordenadas": {"x": 1225, "y": 275},
+          "accesos": 115
+        },
+        {
+          "numero": 14,
+          "coordenadas": {"x": 2675, "y": 225},
+          "accesos": 99
+        }
+      ],
+      "total_accesos": 868
+    },
+    "oeste": {
+      "descripcion": "Accesos desde el oeste",
+      "zonas": [
+        {
+          "numero": 6,
+          "coordenadas": {"x": 1925, "y": 125},
+          "accesos": 193
+        },
+        {
+          "numero": 11,
+          "coordenadas": {"x": 425, "y": 125},
+          "accesos": 114
+        },
+        {
+          "numero": 12,
+          "coordenadas": {"x": 1775, "y": 125},
+          "accesos": 110
+        },
+        {
+          "numero": 13,
+          "coordenadas": {"x": 1825, "y": 125},
+          "accesos": 104
+        }
+      ],
+      "total_accesos": 521
+    }
+  },
+  "estadisticas_generales": {
+    "total_zonas_asignadas": 14,
+    "total_accesos_analizados": 2284,
+    "distribucion_porcentual": {
+      "norte": "9.0%",
+      "sur": "30.2%",
+      "este": "38.0%",
+      "oeste": "22.8%"
+    },
+    "punto_cardinal_dominante": "ESTE",
+    "zona_mas_fuerte": {
+      "numero": 1,
+      "punto_cardinal": "ESTE",
+      "coordenadas": {"x": 2725, "y": 225},
+      "accesos": 267
+    }
+  },
+  "recomendaciones": {
+    "gestion_trafico": "El 38% del tráfico proviene del ESTE, requiere mayor atención en esa dirección",
+    "infraestructura": "Considerar mejoras en accesos desde el ESTE y SUR (68% del tráfico total)",
+    "monitoreo": "Las zonas 1, 2 y 3 representan el 31.8% del tráfico total"
+  }
+}

@@ -1,0 +1,311 @@
+{
+  "entry_hotspots": [
+    {
+      "zone": "54,4",
+      "count": 249,
+      "coordinates": [
+        2725.0,
+        225.0
+      ]
+    },
+    {
+      "zone": "24,4",
+      "count": 165,
+      "coordinates": [
+        1225.0,
+        225.0
+      ]
+    },
+    {
+      "zone": "30,5",
+      "count": 142,
+      "coordinates": [
+        1525.0,
+        275.0
+      ]
+    },
+    {
+      "zone": "18,2",
+      "count": 103,
+      "coordinates": [
+        925.0,
+        125.0
+      ]
+    },
+    {
+      "zone": "36,2",
+      "count": 100,
+      "coordinates": [
+        1825.0,
+        125.0
+      ]
+    },
+    {
+      "zone": "30,4",
+      "count": 96,
+      "coordinates": [
+        1525.0,
+        225.0
+      ]
+    },
+    {
+      "zone": "53,4",
+      "count": 83,
+      "coordinates": [
+        2675.0,
+        225.0
+      ]
+    },
+    {
+      "zone": "2,3",
+      "count": 68,
+      "coordinates": [
+        125.0,
+        175.0
+      ]
+    },
+    {
+      "zone": "30,6",
+      "count": 63,
+      "coordinates": [
+        1525.0,
+        325.0
+      ]
+    },
+    {
+      "zone": "6,2",
+      "count": 61,
+      "coordinates": [
+        325.0,
+        125.0
+      ]
+    }
+  ],
+  "exit_hotspots": [
+    {
+      "zone": "54,5",
+      "count": 209,
+      "coordinates": [
+        2725.0,
+        275.0
+      ]
+    },
+    {
+      "zone": "30,4",
+      "count": 146,
+      "coordinates": [
+        1525.0,
+        225.0
+      ]
+    },
+    {
+      "zone": "38,2",
+      "count": 140,
+      "coordinates": [
+        1925.0,
+        125.0
+      ]
+    },
+    {
+      "zone": "54,6",
+      "count": 117,
+      "coordinates": [
+        2725.0,
+        325.0
+      ]
+    },
+    {
+      "zone": "24,5",
+      "count": 113,
+      "coordinates": [
+        1225.0,
+        275.0
+      ]
+    },
+    {
+      "zone": "18,2",
+      "count": 102,
+      "coordinates": [
+        925.0,
+        125.0
+      ]
+    },
+    {
+      "zone": "8,2",
+      "count": 92,
+      "coordinates": [
+        425.0,
+        125.0
+      ]
+    },
+    {
+      "zone": "24,6",
+      "count": 89,
+      "coordinates": [
+        1225.0,
+        325.0
+      ]
+    },
+    {
+      "zone": "30,5",
+      "count": 73,
+      "coordinates": [
+        1525.0,
+        275.0
+      ]
+    },
+    {
+      "zone": "2,3",
+      "count": 68,
+      "coordinates": [
+        125.0,
+        175.0
+      ]
+    }
+  ],
+  "aforo_stats": {
+    "aforo_001": {
+      "num_entries": 1127,
+      "num_exits": 1127,
+      "entry_hotspots": [
+        [
+          "24,4",
+          165
+        ],
+        [
+          "18,2",
+          103
+        ],
+        [
+          "2,3",
+          68
+        ],
+        [
+          "6,2",
+          61
+        ],
+        [
+          "23,4",
+          56
+        ]
+      ],
+      "exit_hotspots": [
+        [
+          "24,5",
+          113
+        ],
+        [
+          "18,2",
+          102
+        ],
+        [
+          "8,2",
+          92
+        ],
+        [
+          "24,6",
+          89
+        ],
+        [
+          "2,3",
+          68
+        ]
+      ]
+    },
+    "aforo_002": {
+      "num_entries": 1684,
+      "num_exits": 1684,
+      "entry_hotspots": [
+        [
+          "54,4",
+          249
+        ],
+        [
+          "30,5",
+          142
+        ],
+        [
+          "36,2",
+          100
+        ],
+        [
+          "30,4",
+          96
+        ],
+        [
+          "53,4",
+          83
+        ]
+      ],
+      "exit_hotspots": [
+        [
+          "54,5",
+          209
+        ],
+        [
+          "30,4",
+          146
+        ],
+        [
+          "38,2",
+          140
+        ],
+        [
+          "54,6",
+          117
+        ],
+        [
+          "30,5",
+          73
+        ]
+      ]
+    }
+  },
+  "class_stats": {
+    "car": {
+      "num_entries": 1503,
+      "num_exits": 1503
+    },
+    "motorcycle": {
+      "num_entries": 1042,
+      "num_exits": 1042
+    },
+    "person": {
+      "num_entries": 214,
+      "num_exits": 214
+    },
+    "bus": {
+      "num_entries": 3,
+      "num_exits": 3
+    },
+    "truck": {
+      "num_entries": 33,
+      "num_exits": 33
+    },
+    "bicycle": {
+      "num_entries": 7,
+      "num_exits": 7
+    },
+    "tv": {
+      "num_entries": 2,
+      "num_exits": 2
+    },
+    "backpack": {
+      "num_entries": 1,
+      "num_exits": 1
+    },
+    "umbrella": {
+      "num_entries": 1,
+      "num_exits": 1
+    },
+    "fire hydrant": {
+      "num_entries": 4,
+      "num_exits": 4
+    },
+    "dog": {
+      "num_entries": 1,
+      "num_exits": 1
+    }
+  },
+  "grid_size": 50
+}
