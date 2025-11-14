@@ -1,0 +1,118 @@
+╔════════════════════════════════════════════════════════════════╗
+║                                                                ║
+║           SOLUCION: Error "Ultralytics no instalado"           ║
+║                                                                ║
+╚════════════════════════════════════════════════════════════════╝
+
+
+█ PROBLEMA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Al ejecutar VideoProcessor.exe aparece:
+  "Ultralytics no instalado" o "Module not found: ultralytics"
+
+
+█ SOLUCIONES (2 OPCIONES)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+┌─────────────────────────────────────────────────────────────┐
+│ OPCION 1: Usar VideoProcessor con Python (RECOMENDADO)     │
+└─────────────────────────────────────────────────────────────┘
+
+  Esta opcion instala automaticamente ultralytics.
+
+  PASOS:
+
+  1. Doble click en: TrafficAnalysisSystem.bat
+
+  2. Seleccionar opcion: [2] VideoProcessor Python
+
+  3. Esperar a que instale ultralytics (solo primera vez, ~2 min)
+
+  4. Usar normalmente
+
+  ✓ Instalacion automatica
+  ✓ Siempre funciona
+  ✓ Usa CPU (sin CUDA)
+
+
+┌─────────────────────────────────────────────────────────────┐
+│ OPCION 2: Instalar Ultralytics Manualmente                  │
+└─────────────────────────────────────────────────────────────┘
+
+  Si prefieres usar el ejecutable VideoProcessor.exe:
+
+  1. Abrir Command Prompt (CMD)
+
+  2. Ejecutar:
+     pip install ultralytics
+
+  3. Esperar (~2-3 minutos)
+
+  4. Usar VideoProcessor.exe normalmente
+
+
+█ VERIFICAR INSTALACION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Para verificar que ultralytics esta instalado:
+
+  1. Abrir CMD
+
+  2. Ejecutar:
+     python -c "import ultralytics; print('OK')"
+
+  3. Si imprime "OK" → Instalado correctamente
+
+
+█ MENU ACTUALIZADO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  El menu principal ahora tiene 2 opciones de VideoProcessor:
+
+  [1] VideoProcessor EXE
+      └─ Ejecutable standalone
+      └─ Puede requerir instalacion manual de ultralytics
+
+  [2] VideoProcessor Python ← USAR ESTA SI HAY ERROR
+      └─ Instala dependencias automaticamente
+      └─ Usa CPU (sin CUDA)
+      └─ Siempre funciona
+
+  [3] TrafficAnalyzer
+      └─ Visualizar PKL
+
+
+█ PREGUNTA: ¿Por que pasa esto?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  PyInstaller debe empaquetar todas las dependencias en el .exe,
+  pero ultralytics + torch son muy pesados (~500 MB) y a veces
+  la compilacion no se completa correctamente.
+
+  La opcion de Python instala las dependencias directamente y
+  evita este problema.
+
+
+█ ARCHIVOS CREADOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  VideoProcessor_Launcher.bat   ← Launcher con auto-instalacion
+  TrafficAnalysisSystem.bat     ← Menu principal (actualizado)
+
+
+█ RESUMEN RAPIDO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  SI APARECE ERROR "ULTRALYTICS NO INSTALADO":
+
+  → Doble click: TrafficAnalysisSystem.bat
+  → Opcion [2]: VideoProcessor Python
+  → Esperar instalacion
+  → ¡Listo!
+
+
+╔════════════════════════════════════════════════════════════════╗
+║                ¡PROBLEMA RESUELTO!                             ║
+╚════════════════════════════════════════════════════════════════╝

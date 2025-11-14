@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Reporte de Aforo - {{ dataset_id }}</title>
+    <style>
+      body { font-family: Arial, sans-serif; font-size: 11px; color: #222; }
+      h1, h2, h3 { color: #1a1a1a; }
+      table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
+      th, td { border: 1px solid #bbb; padding: 4px 6px; text-align: right; }
+      th { background-color: #f3f3f3; }
+      td.left { text-align: left; }
+      .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+      .card { border: 1px solid #ddd; padding: 8px; border-radius: 4px; background-color: #fafafa; }
+      .card h3 { margin: 0 0 4px 0; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>Reporte de Aforo</h1>
+    <p><strong>Dataset:</strong> {{ dataset_id }} | <strong>Intervalo:</strong> {{ interval_minutes }} minutos</p>
+
+    <div class="summary-grid">
+      <div class="card">
+        <h3>Conflictos detectados</h3>
+        <p style="font-size: 14px; margin: 0;"><strong>{{ conflicts_summary.total_conflicts }}</strong></p>
+      </div>
+      <div class="card">
+        <h3>Velocidad media (km/h)</h3>
+        <p style="margin: 0;">
+          {% if speed_summary %}
+            {% set total = [] %}
+            {% for stats in speed_summary.values() %}
+              {% set _ = total.append(stats.mean_kmh) %}
+            {% endfor %}
+            <strong>{{ (total | sum / total | length) | round(2) }}</strong>
+          {% else %}
+            No disponible
+          {% endif %}
+        </p>
+      </div>
+      <div class="card">
+        <h3>Movimientos analizados</h3>
+        <p style="font-size: 14px; margin: 0;"><strong>{{ movements | length }}</strong></p>
+      </div>
+    </div>
+
+    <h2>Volúmenes totales por intervalo</h2>
+    <table>
+      <thead>
+        <tr>
+          <th class="left">Intervalo (min)</th>
+          <th>Autos</th>
+          <th>Buses</th>
+          <th>Camiones</th>
+          <th>Motos</th>
+          <th>Bicis</th>
+          <th>Peatones</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in totals %}
+          <tr>
+            <td class="left">{{ row.interval_start }} - {{ row.interval_end }}</td>
+            <td>{{ row.autos }}</td>
+            <td>{{ row.buses }}</td>
+            <td>{{ row.camiones }}</td>
+            <td>{{ row.motos }}</td>
+            <td>{{ row.bicis }}</td>
+            <td>{{ row.peatones }}</td>
+            <td>{{ row.total }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h2>Resumen de movim&nbsp;entos RILSA</h2>
+    {% for rilsa_code, rows in movements.items() %}
+      <h3>Movimiento {{ rilsa_code }}</h3>
+      <table>
+        <thead>
+          <tr>
+            <th class="left">Intervalo (min)</th>
+            <th>Autos</th>
+            <th>Buses</th>
+            <th>Camiones</th>
+            <th>Motos</th>
+            <th>Bicis</th>
+            <th>Peatones</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <td class="left">{{ row.interval_start }} - {{ row.interval_end }}</td>
+              <td>{{ row.autos }}</td>
+              <td>{{ row.buses }}</td>
+              <td>{{ row.camiones }}</td>
+              <td>{{ row.motos }}</td>
+              <td>{{ row.bicis }}</td>
+              <td>{{ row.peatones }}</td>
+              <td>{{ row.total }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endfor %}
+
+    <h2>Resumen de velocidades</h2>
+    {% if speed_summary %}
+      <table>
+        <thead>
+          <tr>
+            <th class="left">Movimiento</th>
+            <th>Clase</th>
+            <th>Count</th>
+            <th>Media</th>
+            <th>Mediana</th>
+            <th>P85</th>
+            <th>Mín</th>
+            <th>Máx</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for key, stats in speed_summary.items() %}
+            {% set rilsa_code, vehicle_class = key %}
+            <tr>
+              <td class="left">{{ rilsa_code }}</td>
+              <td class="left">{{ vehicle_class }}</td>
+              <td>{{ stats.count }}</td>
+              <td>{{ stats.mean_kmh | round(2) }}</td>
+              <td>{{ stats.median_kmh | round(2) }}</td>
+              <td>{{ stats.p85_kmh | round(2) }}</td>
+              <td>{{ stats.min_kmh | round(2) }}</td>
+              <td>{{ stats.max_kmh | round(2) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No se encontraron velocidades suficientes para el resumen.</p>
+    {% endif %}
+  </body>
+</html>
+

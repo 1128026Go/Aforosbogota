@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # Backend API (FastAPI)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "3004:3004"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./api:/app/api
+      - ./data:/app/data
+    command: uvicorn api.main:app --host 0.0.0.0 --port 3004 --reload
+    networks:
+      - aforos-network
+
+  # Frontend (React)
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:3004
+      - VITE_API_URL=http://localhost:3004
+    depends_on:
+      - api
+    volumes:
+      - ./apps/web/src:/app/src
+      - ./apps/web/public:/app/public
+    command: npm run dev -- --host 0.0.0.0
+    networks:
+      - aforos-network
+
+networks:
+  aforos-network:
+    driver: bridge

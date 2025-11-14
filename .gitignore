@@ -1,0 +1,57 @@
+# entornos Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# node / frontend
+node_modules/
+dist/
+build/
+*.log
+
+# artefactos de build Python
+*.egg-info/
+.eggs/
+
+# binarios / ejecutables
+*.exe
+*.dll
+*.so
+*.spec
+*.app
+
+# IDE / entorno
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Variables de entorno
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Archivos temporales
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Datos de prueba
+data/*/raw.pkl
+data/*/normalized.parquet
+sample_detections*.pkl
+
+# Misceláneo
+.claude/
+

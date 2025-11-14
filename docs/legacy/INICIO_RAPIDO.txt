@@ -1,0 +1,127 @@
+╔════════════════════════════════════════════════════════════════╗
+║                                                                ║
+║     GUIA RAPIDA - PROCESAR VIDEO SIN CUDA                      ║
+║                                                                ║
+╚════════════════════════════════════════════════════════════════╝
+
+
+█ PASO 1: INSTALAR ULTRALYTICS (Solo Primera Vez)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   pip install ultralytics
+
+
+█ PASO 2: PROCESAR TU VIDEO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   OPCION A - Batch File (Mas Facil):
+
+      1. Doble click en: procesar_video.bat
+      2. Arrastrar tu video
+      3. Presionar ENTER
+      4. Esperar...
+
+   OPCION B - Linea de Comandos:
+
+      python procesar_video_simple.py mi_video.mp4
+
+
+█ PASO 3: VISUALIZAR RESULTADOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   1. Doble click en: dist\TrafficAnalyzer.exe
+
+   2. Click "Cargar PKL"
+      → Seleccionar: mi_video_detections.pkl
+
+   3. [OPCIONAL] Click "Cargar Video"
+      → Seleccionar: mi_video.mp4
+
+   4. Ver detecciones y trayectorias
+
+   5. Clasificar zonas
+
+   6. Exportar configuracion
+
+
+█ IMPORTANTE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   ✓ procesar_video_simple.py → PROCESA video (genera PKL)
+                                 Usa CPU, NO usa CUDA
+                                 Puede tardar
+
+   ✓ TrafficAnalyzer.exe → VISUALIZA PKL (no procesa)
+                           Rapido
+                           No necesita GPU
+
+
+█ CONFIGURACION AUTOMATICA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   El script usa configuracion optimizada para CPU:
+
+   • Modelo: yolov8n (mas rapido)
+   • Dispositivo: CPU (SIN CUDA)
+   • Skip frames: 2 (procesa mitad)
+   • Resolucion: 640px
+
+   → No necesitas configurar nada
+
+
+█ TIEMPO ESTIMADO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   Video de 1 minuto:  ~5-8 minutos
+   Video de 10 minutos: ~50-80 minutos
+   Video de 1 hora: ~5-8 horas
+
+   → Para videos largos, procesa de noche
+
+
+█ EJEMPLO COMPLETO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   C:\Users\David\aforos> python procesar_video_simple.py trafico.mp4
+
+   ==========================================
+     PROCESADOR DE VIDEO - MODO CPU
+   ==========================================
+
+   ✓ Modelo cargado en CPU
+   ⚙️ Procesando frames...
+   [10/450] 2.2% - 23 detecciones
+   [20/450] 4.4% - 48 detecciones
+   ...
+   ✓ Procesamiento completado!
+   💾 Guardando PKL: trafico_detections.pkl
+
+   ==========================================
+     ¡LISTO!
+   ==========================================
+
+
+█ DOCUMENTACION COMPLETA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   COMO_PROCESAR_VIDEO.md  → Guia detallada
+   SISTEMA_COMPLETO.md     → Documentacion completa
+   README.md               → Manual de TrafficAnalyzer
+
+
+█ SOPORTE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   Error "ultralytics not found":
+      pip install ultralytics
+
+   Video no se abre:
+      Verificar que no este corrupto
+
+   Muy lento:
+      Es normal en CPU. Ten paciencia.
+
+
+╔════════════════════════════════════════════════════════════════╗
+║  ¡LISTO! Ya puedes procesar videos sin problemas de CUDA      ║
+╚════════════════════════════════════════════════════════════════╝
