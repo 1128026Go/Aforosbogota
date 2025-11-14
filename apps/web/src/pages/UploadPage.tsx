@@ -3,6 +3,7 @@
  */
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import api from "@/lib/api";
 
 interface UploadPageProps {
   onDatasetCreated?: (datasetId: string) => void;
@@ -33,20 +34,7 @@ const UploadPage: React.FC<UploadPageProps> = ({ onDatasetCreated }) => {
     setSuccess(null);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/datasets/upload`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || `Upload failed: ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = await api.uploadDataset(file);
       setSuccess(`PKL procesado exitosamente. Dataset: ${data.dataset_id}`);
       setFile(null);
 
@@ -76,7 +64,10 @@ const UploadPage: React.FC<UploadPageProps> = ({ onDatasetCreated }) => {
           <div className="border-2 border-dashed border-slate-300 rounded-xl p-12 text-center hover:border-blue-400 transition mb-6 cursor-pointer"
             onDrop={(e) => {
               e.preventDefault();
-              handleFileSelect({ target: { files: e.dataTransfer.files } } as any);
+              const files = e.dataTransfer.files;
+              if (files && files.length > 0) {
+                handleFileSelect({ target: { files } } as React.ChangeEvent<HTMLInputElement>);
+              }
             }}
             onDragOver={(e) => e.preventDefault()}
           >
@@ -129,23 +120,11 @@ const UploadPage: React.FC<UploadPageProps> = ({ onDatasetCreated }) => {
         {/* Datasets Library */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
           <h2 className="text-xl font-bold text-gray-900 mb-6">Datasets Recientes</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Sample dataset card (will be populated from API) */}
-            <div
-              className="border border-slate-200 rounded-lg p-4 hover:shadow-md cursor-pointer transition"
-              onClick={() => navigate("/datasets/gx010323/config")}
-            >
-              <div className="font-medium text-gray-900">gx010323</div>
-              <div className="text-xs text-gray-500 mt-1">
-                📊 1500 frames | 🚗 45 tracks
-              </div>
-              <div className="text-xs text-gray-500 mt-2">Created: 2025-01-15</div>
-            </div>
-          </div>
-
-          <p className="text-sm text-gray-500 mt-6 text-center">
-            Sube un nuevo PKL para comenzar o selecciona uno existente arriba
+          <p className="text-sm text-gray-500 mb-4">
+            Sube un nuevo PKL para comenzar. Los datasets procesados aparecerán aquí cuando la API implemente el listado.
+          </p>
+          <p className="text-sm text-gray-500 text-center">
+            Aún no hay datasets listados automáticamente.
           </p>
         </div>
       </div>

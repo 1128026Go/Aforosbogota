@@ -73,6 +73,8 @@ def assign_tracks_to_movements(
     rilsa_map: Dict,
     fps: float = 30.0,
     min_length_m: float = 5.0,
+    max_direction_changes: int = 20,
+    min_net_over_path_ratio: float = 0.2,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Filtra trayectorias y asigna metadata (rilsa_code, vehicle_class) por track.
@@ -81,7 +83,12 @@ def assign_tracks_to_movements(
       - DataFrame filtrado.
       - DataFrame con columnas [track_id, rilsa_code, vehicle_class, interval_start, interval_end].
     """
-    filtered = filters.filter_tracks(df, min_length_m=min_length_m)
+    filtered = filters.filter_tracks(
+        df,
+        min_length_m=min_length_m,
+        max_direction_changes=max_direction_changes,
+        min_net_over_path_ratio=min_net_over_path_ratio,
+    )
     veh_lookup, ped_lookup = _build_rilsa_lookups(accesses, rilsa_map)
 
     records = []
@@ -117,6 +124,8 @@ def calculate_counts_by_interval(
     interval_minutes: int = 15,
     fps: float = 30.0,
     min_length_m: float = 5.0,
+    max_direction_changes: int = 20,
+    min_net_over_path_ratio: float = 0.2,
 ) -> pd.DataFrame:
     """
     Calcula un DataFrame con las columnas:
@@ -132,6 +141,8 @@ def calculate_counts_by_interval(
         rilsa_map,
         fps=fps,
         min_length_m=min_length_m,
+        max_direction_changes=max_direction_changes,
+        min_net_over_path_ratio=min_net_over_path_ratio,
     )
 
     results = defaultdict(int)

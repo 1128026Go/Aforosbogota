@@ -102,7 +102,7 @@ def test_detect_conflicts() -> None:
             "vehicle_class": ["auto", "auto", "auto", "auto"],
         }
     )
-    conflicts = detect_conflicts(df, fps=30.0, distance_threshold=1.5, ttc_threshold=2.0)
+    conflicts = detect_conflicts(df, fps=30.0, distance_threshold=1.5, ttc_threshold_s=2.0)
     assert len(conflicts) >= 1
     assert conflicts[0].pair_type == "vehicle-vehicle"
 

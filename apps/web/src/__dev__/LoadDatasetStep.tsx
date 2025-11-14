@@ -1,5 +1,8 @@
 /**
- * LoadDatasetStep - Step 1: Load PKL trajectories
+ * LoadDatasetStep (DEV-ONLY)
+ *
+ * Este componente se mantiene únicamente para escenarios de desarrollo interno.
+ * No debe importarse ni renderizarse en el flujo productivo.
  */
 import React, { useState } from "react";
 import { TrajectoryPoint } from "@/types";
@@ -10,13 +13,12 @@ interface LoadDatasetStepProps {
   isLoading?: boolean;
 }
 
-export const LoadDatasetStep: React.FC<LoadDatasetStepProps> = ({
+const LoadDatasetStep: React.FC<LoadDatasetStepProps> = ({
   onTrajectoriesLoaded,
   onNext,
   isLoading = false,
 }) => {
   const [mockData] = useState<TrajectoryPoint[]>([
-    // Mock data - En producción viene del PKL
     { frame_id: 1, track_id: 1, x: 100, y: 150, class_id: 0, object_type: "car", confidence: 0.95 },
     { frame_id: 2, track_id: 1, x: 120, y: 160, class_id: 0, object_type: "car", confidence: 0.93 },
     { frame_id: 3, track_id: 1, x: 140, y: 170, class_id: 0, object_type: "car", confidence: 0.94 },
@@ -35,46 +37,21 @@ export const LoadDatasetStep: React.FC<LoadDatasetStepProps> = ({
       <div className="space-y-6">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 mb-2">
-            Paso 1: Cargar Dataset
+            Paso 1: Cargar Dataset (Demo)
           </h2>
           <p className="text-slate-600">
-            Cargue el archivo PKL con las trayectorias de los vehículos
+            Este paso usa datos simulados únicamente para desarrollo.
           </p>
         </div>
 
-        <div className="border-2 border-dashed border-slate-300 rounded-lg p-12 text-center hover:border-blue-400 transition-colors cursor-pointer">
+        <div className="border-2 border-dashed border-slate-300 rounded-lg p-12 text-center">
           <div className="space-y-4">
-            <svg
-              className="mx-auto h-12 w-12 text-slate-400"
-              stroke="currentColor"
-              fill="none"
-              viewBox="0 0 48 48"
-            >
-              <path
-                d="M28 8H12a4 4 0 00-4 4v20a4 4 0 004 4h24a4 4 0 004-4V20m-14-12l-4 4m0 0l4 4m-4-4h16"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
             <div>
               <p className="font-semibold text-slate-900">
-                Arrastra tu archivo PKL aquí
-              </p>
-              <p className="text-sm text-slate-500">
-                o haz clic para seleccionar
+                Este modo de demo carga datos mockeados
               </p>
             </div>
           </div>
-        </div>
-
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-blue-800">
-            <strong>Nota:</strong> El archivo PKL debe contener las trayectorias en formato:
-            <code className="bg-white px-2 py-1 rounded ml-1">
-              List[TrajectoryPoint]
-            </code>
-          </p>
         </div>
 
         <div className="flex justify-center gap-4">
@@ -88,7 +65,7 @@ export const LoadDatasetStep: React.FC<LoadDatasetStepProps> = ({
         </div>
 
         <div className="bg-slate-50 rounded-lg p-4">
-          <h3 className="font-semibold text-slate-900 mb-2">Dataset: gx010323</h3>
+          <h3 className="font-semibold text-slate-900 mb-2">Dataset de prueba</h3>
           <div className="text-sm text-slate-600 space-y-1">
             <p>📊 Trayectorias: {mockData.length} puntos</p>
             <p>🚗 Tracks: 2 vehículos</p>

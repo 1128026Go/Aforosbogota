@@ -54,4 +54,5 @@ sample_detections*.pkl
 
 # Misceláneo
 .claude/
+apps/web/tsconfig.tsbuildinfo
 

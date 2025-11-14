@@ -1,47 +1,113 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "@/lib/api";
 import {
+  AnalysisSettings,
   VolumesResponse,
   SpeedsResponse,
   ConflictsResponse,
+  ViolationsResponse,
   VolumeRow,
-  MovementSpeedStats,
   ConflictEvent,
+  ForbiddenMovement,
 } from "@/types";
+import {
+  LineChart,
+  Line,
+  CartesianGrid,
+  Tooltip,
+  XAxis,
+  YAxis,
+  ResponsiveContainer,
+  Legend,
+  BarChart,
+  Bar,
+  LabelList,
+} from "recharts";
 
-type TabId = "volumes" | "speeds" | "conflicts" | "downloads";
+type TabId =
+  | "volumes"
+  | "speeds"
+  | "conflicts"
+  | "violations"
+  | "settings"
+  | "downloads";
 
-const VEHICLE_COLUMNS: (keyof VolumeRow)[] = [
-  "autos",
-  "buses",
-  "camiones",
-  "motos",
-  "bicis",
-  "peatones",
-];
+type VolumeColumns = Record<keyof VolumeRow, boolean>;
 
-const columnLabels: Record<keyof VolumeRow, string> = {
-  interval_start: "Inicio",
-  interval_end: "Fin",
-  autos: "Autos",
-  buses: "Buses",
-  camiones: "Camiones",
-  motos: "Motos",
-  bicis: "Bicicletas",
-  peatones: "Peatones",
-  total: "Total",
+type DownloadState = "idle" | "loading";
+
+type ForbiddenFormAction = "input" | "save";
+
+const SERIES_COLORS: Record<string, string> = {
+  total: "#1d4ed8",
+  autos: "#2563eb",
+  buses: "#7c3aed",
+  camiones: "#9333ea",
+  motos: "#f97316",
+  bicis: "#0ea5e9",
+  peatones: "#ef4444",
+};
+
+const SPEED_BAR_COLORS = {
+  mean: "#2563eb",
+  p85: "#f97316",
+};
+
+const DEFAULT_SETTINGS: AnalysisSettings = {
+  interval_minutes: 15,
+  min_length_m: 5,
+  max_direction_changes: 20,
+  min_net_over_path_ratio: 0.2,
+  ttc_threshold_s: 1.5,
+};
+
+const formatNumber = new Intl.NumberFormat("es-CO", {
+  maximumFractionDigits: 2,
+});
+
+const stringifyForbidden = (items: ForbiddenMovement[]): string =>
+  items
+    .map((item) =>
+      item.description && item.description.trim().length > 0
+        ? `${item.rilsa_code}:${item.description}`
+        : item.rilsa_code
+    )
+    .join("\n");
+
+const parseForbiddenInput = (raw: string): ForbiddenMovement[] => {
+  const map = new Map<string, string | undefined>();
+  raw
+    .split(/\n|,/) // soporta comas o saltos de línea
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .forEach((entry) => {
+      const [codeRaw, ...rest] = entry.split(":");
+      const normalizedCode = (codeRaw ?? "").trim();
+      if (!normalizedCode) return;
+      const description = rest.join(":").trim();
+      map.set(normalizedCode, description.length > 0 ? description : undefined);
+    });
+  return Array.from(map.entries()).map(([rilsa_code, description]) => ({ rilsa_code, description }));
 };
 
 const ResultsPage: React.FC = () => {
   const { datasetId } = useParams<{ datasetId: string }>();
   const [activeTab, setActiveTab] = useState<TabId>("volumes");
+  const [analysisSettings, setAnalysisSettings] = useState<AnalysisSettings | null>(null);
+  const [settingsDraft, setSettingsDraft] = useState<AnalysisSettings | null>(null);
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [volumes, setVolumes] = useState<VolumesResponse | null>(null);
   const [speeds, setSpeeds] = useState<SpeedsResponse | null>(null);
   const [conflicts, setConflicts] = useState<ConflictsResponse | null>(null);
+  const [violations, setViolations] = useState<ViolationsResponse | null>(null);
+  const [forbiddenInput, setForbiddenInput] = useState("");
+  const [forbiddenSaving, setForbiddenSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [visibleColumns, setVisibleColumns] = useState<Record<keyof VolumeRow, boolean>>({
+  const [downloadState, setDownloadState] = useState<DownloadState>("idle");
+  const [downloadMessage, setDownloadMessage] = useState<string | null>(null);
+  const [visibleColumns, setVisibleColumns] = useState<VolumeColumns>({
     interval_start: true,
     interval_end: true,
     autos: true,
@@ -52,44 +118,81 @@ const ResultsPage: React.FC = () => {
     peatones: true,
     total: true,
   });
-  const [downloadState, setDownloadState] = useState<"idle" | "loading">("idle");
-  const [downloadMessage, setDownloadMessage] = useState<string | null>(null);
   const [conflictFilters, setConflictFilters] = useState<Record<string, boolean>>({});
+  const [ttcFilter, setTtcFilter] = useState<number>(DEFAULT_SETTINGS.ttc_threshold_s);
+
+  const initializeFilters = useCallback((events: ConflictEvent[]) => {
+    const filters: Record<string, boolean> = {};
+    events.forEach((evt) => {
+      filters[evt.pair_type] = true;
+    });
+    setConflictFilters(filters);
+  }, []);
+
+  const refreshAnalysis = useCallback(async () => {
+    if (!datasetId) return;
+    try {
+      const [volumesData, speedsData, conflictsData, violationsData] = await Promise.all([
+        api.getVolumes(datasetId),
+        api.getSpeeds(datasetId),
+        api.getConflicts(datasetId),
+        api.getViolations(datasetId),
+      ]);
+      setVolumes(volumesData);
+      setSpeeds(speedsData);
+      setConflicts(conflictsData);
+      setViolations(violationsData);
+      if (conflictsData?.events?.length) {
+        initializeFilters(conflictsData.events);
+      }
+    } catch (err) {
+      console.error(err);
+      setError((err as Error).message);
+    }
+  }, [datasetId, initializeFilters]);
+
+  const loadAll = useCallback(async () => {
+    if (!datasetId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const [settingsData, forbiddenData, volumesData, speedsData, conflictsData, violationsData] = await Promise.all([
+        api.getAnalysisSettings(datasetId),
+        api.getForbiddenMovements(datasetId),
+        api.getVolumes(datasetId),
+        api.getSpeeds(datasetId),
+        api.getConflicts(datasetId),
+        api.getViolations(datasetId),
+      ]);
+      setAnalysisSettings(settingsData);
+      setSettingsDraft(settingsData);
+      setTtcFilter(settingsData.ttc_threshold_s);
+      setForbiddenInput(stringifyForbidden(forbiddenData));
+      setVolumes(volumesData);
+      setSpeeds(speedsData);
+      setConflicts(conflictsData);
+      setViolations(violationsData);
+      if (conflictsData?.events?.length) {
+        initializeFilters(conflictsData.events);
+      }
+    } catch (err) {
+      console.error(err);
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, [datasetId, initializeFilters]);
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (!datasetId) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const [volumesData, speedsData, conflictsData] = await Promise.all([
-          api.getVolumes(datasetId),
-          api.getSpeeds(datasetId),
-          api.getConflicts(datasetId),
-        ]);
-        setVolumes(volumesData);
-        setSpeeds(speedsData);
-        setConflicts(conflictsData);
-        if (conflictsData?.events) {
-          const filters: Record<string, boolean> = {};
-          conflictsData.events.forEach((event) => {
-            filters[event.pair_type] = true;
-          });
-          setConflictFilters(filters);
-        }
-      } catch (err) {
-        setError((err as Error).message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [datasetId]);
+    loadAll();
+  }, [loadAll]);
 
   const filteredConflictEvents = useMemo(() => {
     if (!conflicts) return [];
-    return conflicts.events.filter((event) => conflictFilters[event.pair_type]);
-  }, [conflicts, conflictFilters]);
+    return conflicts.events.filter(
+      (event) => conflictFilters[event.pair_type] && event.ttc_min <= ttcFilter
+    );
+  }, [conflicts, conflictFilters, ttcFilter]);
 
   const maxSpeedValue = useMemo(() => {
     if (!speeds) return 1;
@@ -141,6 +244,58 @@ const ResultsPage: React.FC = () => {
     }));
   };
 
+  const handleSettingsDraft = <K extends keyof AnalysisSettings>(
+    key: K,
+    value: AnalysisSettings[K]
+  ) => {
+    setSettingsDraft((prev) => (prev ? { ...prev, [key]: value } : { ...DEFAULT_SETTINGS, [key]: value }));
+  };
+
+  const handleSaveSettings = async () => {
+    if (!datasetId || !settingsDraft) return;
+    setSettingsSaving(true);
+    try {
+      const saved = await api.updateAnalysisSettings(datasetId, settingsDraft);
+      setAnalysisSettings(saved);
+      setTtcFilter(saved.ttc_threshold_s);
+      setDownloadMessage("Configuración avanzada guardada correctamente");
+      await refreshAnalysis();
+    } catch (err) {
+      setDownloadMessage(`Error al guardar configuración: ${(err as Error).message}`);
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  const handleResetSettings = () => {
+    if (analysisSettings) {
+      setSettingsDraft(analysisSettings);
+      setTtcFilter(analysisSettings.ttc_threshold_s);
+    }
+  };
+
+  const handleForbiddenChange = (value: string, origin: ForbiddenFormAction) => {
+    if (origin === "input") {
+      setForbiddenInput(value);
+    }
+  };
+
+  const handleSaveForbidden = async () => {
+    if (!datasetId) return;
+    setForbiddenSaving(true);
+    try {
+      const parsed = parseForbiddenInput(forbiddenInput);
+      const updated = await api.updateForbiddenMovements(datasetId, parsed);
+      setForbiddenInput(stringifyForbidden(updated));
+      await refreshAnalysis();
+      setDownloadMessage("Lista de maniobras prohibidas actualizada");
+    } catch (err) {
+      setDownloadMessage(`Error al actualizar maniobras prohibidas: ${(err as Error).message}`);
+    } finally {
+      setForbiddenSaving(false);
+    }
+  };
+
   if (!datasetId) {
     return <div className="p-12 text-center text-red-600">Dataset no encontrado.</div>;
   }
@@ -151,15 +306,17 @@ const ResultsPage: React.FC = () => {
         <header className="bg-white border border-slate-200 rounded-2xl px-8 py-6 shadow-sm">
           <h1 className="text-2xl font-bold text-slate-900">Análisis integral – Dataset {datasetId}</h1>
           <p className="text-sm text-slate-600 mt-1">
-            Visualiza volúmenes RILSA, velocidades por clase y conflictos TTC/PET. Genera reportes descargables en CSV, Excel y PDF.
+            Ajusta la configuración avanzada, monitorea volúmenes, velocidades, conflictos TTC/PET y maniobras indebidas en un solo lugar.
           </p>
         </header>
 
-        <nav className="flex gap-4">
+        <nav className="flex flex-wrap gap-4">
           {[
             { id: "volumes", label: "Volúmenes" },
             { id: "speeds", label: "Velocidades" },
             { id: "conflicts", label: "Conflictos" },
+            { id: "violations", label: "Maniobras indebidas" },
+            { id: "settings", label: "Configuración avanzada" },
             { id: "downloads", label: "Descargas" },
           ].map((tab) => (
             <button
@@ -195,12 +352,35 @@ const ResultsPage: React.FC = () => {
               filters={conflictFilters}
               onToggleFilter={toggleConflictFilter}
               filteredEvents={filteredConflictEvents}
+              severityThreshold={ttcFilter}
+              onSeverityChange={setTtcFilter}
+              onRefresh={refreshAnalysis}
+            />
+          ) : activeTab === "violations" ? (
+            <ViolationsPanel
+              data={violations}
+              forbiddenInput={forbiddenInput}
+              onForbiddenChange={handleForbiddenChange}
+              onSaveForbidden={handleSaveForbidden}
+              saving={forbiddenSaving}
+            />
+          ) : activeTab === "settings" ? (
+            <SettingsPanel
+              settings={analysisSettings}
+              draft={settingsDraft}
+              onFieldChange={handleSettingsDraft}
+              onSave={handleSaveSettings}
+              onReset={handleResetSettings}
+              saving={settingsSaving}
             />
           ) : (
             <DownloadsPanel
               state={downloadState}
               message={downloadMessage}
               onGenerate={handleDownload}
+              totalVehicles={volumes?.totals_by_interval.reduce((sum, row) => sum + row.total, 0) ?? 0}
+              totalViolations={violations?.total_violations ?? 0}
+              totalConflicts={conflicts?.total_conflicts ?? 0}
             />
           )}
         </section>
@@ -211,7 +391,7 @@ const ResultsPage: React.FC = () => {
 
 interface VolumeDashboardProps {
   data: VolumesResponse | null;
-  visibleColumns: Record<keyof VolumeRow, boolean>;
+  visibleColumns: VolumeColumns;
   onToggleColumn: (column: keyof VolumeRow) => void;
 }
 
@@ -221,18 +401,31 @@ const VolumeDashboard: React.FC<VolumeDashboardProps> = ({ data, visibleColumns,
   }
 
   const activeColumns = (Object.keys(visibleColumns) as (keyof VolumeRow)[]).filter(
-    (column) => visibleColumns[column] && column !== "interval_start" && column !== "interval_end"
+    (column) => visibleColumns[column] && !["interval_start", "interval_end", "total"].includes(column)
   );
+
+  const chartData = data.totals_by_interval.map((row) => ({
+    interval: `${row.interval_start}-${row.interval_end}`,
+    total: row.total,
+    autos: row.autos,
+    buses: row.buses,
+    camiones: row.camiones,
+    motos: row.motos,
+    bicis: row.bicis,
+    peatones: row.peatones,
+  }));
+
+  const seriesToRender = ["total", ...activeColumns];
 
   return (
     <div className="space-y-8">
       <header>
         <h2 className="text-xl font-semibold text-slate-900">Volúmenes cada {data.interval_minutes} minutos</h2>
         <p className="text-sm text-slate-500">
-          Usa los toggles para elegir qué categorías visualizar en la tabla principal y en cada movimiento RILSA.
+          Visualiza la evolución por intervalo y activa las categorías que quieras destacar en la tabla y gráfica.
         </p>
         <div className="flex flex-wrap gap-3 mt-4">
-          {VEHICLE_COLUMNS.map((column) => (
+          {(["autos", "buses", "camiones", "motos", "bicis", "peatones"] as (keyof VolumeRow)[]).map((column) => (
             <label
               key={column}
               className={`flex items-center gap-2 text-sm px-3 py-1 rounded-full border ${
@@ -246,25 +439,58 @@ const VolumeDashboard: React.FC<VolumeDashboardProps> = ({ data, visibleColumns,
                 checked={visibleColumns[column]}
                 onChange={() => onToggleColumn(column)}
               />
-              {columnLabels[column]}
+              {column.toUpperCase()}
             </label>
           ))}
         </div>
       </header>
 
+      <div className="h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#cbd5f5" />
+            <XAxis dataKey="interval" tick={{ fontSize: 10 }} interval={Math.max(0, Math.floor(chartData.length / 8))} />
+            <YAxis tick={{ fontSize: 10 }} />
+            <Tooltip formatter={(value: number) => formatNumber.format(value)} />
+            <Legend />
+            {seriesToRender.map((seriesKey) => (
+              <Line
+                key={seriesKey}
+                type="monotone"
+                dataKey={seriesKey}
+                stroke={SERIES_COLORS[seriesKey] || "#1d4ed8"}
+                strokeWidth={seriesKey === "total" ? 3 : 2}
+                dot={false}
+                activeDot={{ r: 4 }}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      <VolumeTables data={data} visibleColumns={visibleColumns} />
+    </div>
+  );
+};
+
+const VolumeTables: React.FC<{ data: VolumesResponse; visibleColumns: VolumeColumns }> = ({ data, visibleColumns }) => {
+  const columns = (Object.keys(visibleColumns) as (keyof VolumeRow)[]).filter(
+    (column) =>
+      visibleColumns[column] && column !== "interval_start" && column !== "interval_end"
+  );
+
+  return (
+    <>
       <div className="overflow-x-auto border border-slate-200 rounded-xl">
         <table className="min-w-full text-sm">
           <thead className="bg-slate-50">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-slate-600">Intervalo</th>
-              {activeColumns.map((column) => (
+              {columns.map((column) => (
                 <th key={column} className="px-4 py-3 text-right font-medium text-slate-600">
-                  {columnLabels[column]}
+                  {column.toUpperCase()}
                 </th>
               ))}
-              {visibleColumns.total && (
-                <th className="px-4 py-3 text-right font-semibold text-slate-700">Total</th>
-              )}
             </tr>
           </thead>
           <tbody>
@@ -273,14 +499,11 @@ const VolumeDashboard: React.FC<VolumeDashboardProps> = ({ data, visibleColumns,
                 <td className="px-4 py-3 font-mono text-slate-600">
                   {row.interval_start}-{row.interval_end}
                 </td>
-                {activeColumns.map((column) => (
+                {columns.map((column) => (
                   <td key={column} className="px-4 py-3 text-right">
                     {row[column]}
                   </td>
                 ))}
-                {visibleColumns.total && (
-                  <td className="px-4 py-3 text-right font-semibold text-slate-800">{row.total}</td>
-                )}
               </tr>
             ))}
           </tbody>
@@ -305,17 +528,20 @@ const VolumeDashboard: React.FC<VolumeDashboardProps> = ({ data, visibleColumns,
           </details>
         ))}
       </div>
-    </div>
+    </>
   );
 };
 
 interface MovementTableProps {
   rows: VolumeRow[];
-  visibleColumns: Record<keyof VolumeRow, boolean>;
+  visibleColumns: VolumeColumns;
 }
 
 const MovementTable: React.FC<MovementTableProps> = ({ rows, visibleColumns }) => {
-  const columns = VEHICLE_COLUMNS.filter((column) => visibleColumns[column]);
+  const columns = (Object.keys(visibleColumns) as (keyof VolumeRow)[]).filter(
+    (column) =>
+      visibleColumns[column] && column !== "interval_start" && column !== "interval_end"
+  );
   return (
     <table className="min-w-full text-xs mt-3">
       <thead className="bg-slate-100">
@@ -323,12 +549,9 @@ const MovementTable: React.FC<MovementTableProps> = ({ rows, visibleColumns }) =
           <th className="text-left px-3 py-2 font-medium text-slate-600">Intervalo</th>
           {columns.map((column) => (
             <th key={column} className="px-3 py-2 text-right font-medium text-slate-600">
-              {columnLabels[column]}
+              {column.toUpperCase()}
             </th>
           ))}
-          {visibleColumns.total && (
-            <th className="px-3 py-2 text-right font-semibold text-slate-700">Total</th>
-          )}
         </tr>
       </thead>
       <tbody>
@@ -342,9 +565,6 @@ const MovementTable: React.FC<MovementTableProps> = ({ rows, visibleColumns }) =
                 {row[column]}
               </td>
             ))}
-            {visibleColumns.total && (
-              <td className="px-3 py-2 text-right font-semibold text-slate-800">{row.total}</td>
-            )}
           </tr>
         ))}
       </tbody>
@@ -362,17 +582,53 @@ const SpeedDashboard: React.FC<SpeedDashboardProps> = ({ data, maxValue }) => {
     return <div className="text-slate-500">Sin datos de velocidad suficientes.</div>;
   }
 
+  const chartData = data.per_movement.slice(0, 20).map((record) => ({
+    key: `${record.rilsa_code}-${record.vehicle_class}`,
+    rilsa_code: record.rilsa_code,
+    vehicle_class: record.vehicle_class,
+    mean_kmh: record.stats.mean_kmh,
+    p85_kmh: record.stats.p85_kmh,
+    count: record.stats.count,
+  }));
+
   return (
     <div className="space-y-6">
       <header>
         <h2 className="text-xl font-semibold text-slate-900">Velocidades por movimiento y clase</h2>
         <p className="text-sm text-slate-500">
-          Las barras muestran la velocidad media y el percentil 85 por tipo de vehículo. Los extremos indican valores máximos observados.
+          Compara velocidad media y percentil 85 para los movimientos con más trayectorias.
         </p>
       </header>
 
-      <div className="space-y-4">
-        {data.per_movement.map((record: MovementSpeedStats) => (
+      <div className="h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#cbd5f5" />
+            <XAxis
+              dataKey="key"
+              tickFormatter={(value: string | number) => {
+                if (typeof value === "string") {
+                  const [movement] = value.split("-");
+                  return movement ?? value;
+                }
+                return String(value);
+              }}
+              tick={{ fontSize: 10 }}
+              interval={0}
+            />
+            <YAxis tick={{ fontSize: 10 }} domain={[0, Math.ceil(maxValue / 5) * 5]} />
+            <Tooltip formatter={(value: number) => `${formatNumber.format(value)} km/h`} />
+            <Legend />
+            <Bar dataKey="mean_kmh" fill={SPEED_BAR_COLORS.mean} radius={[4, 4, 0, 0]}>
+              <LabelList dataKey="count" position="top" formatter={(value: number) => `${value} tr.`} />
+            </Bar>
+            <Bar dataKey="p85_kmh" fill={SPEED_BAR_COLORS.p85} radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="grid gap-4">
+        {data.per_movement.map((record) => (
           <div key={`${record.rilsa_code}-${record.vehicle_class}`} className="border border-slate-200 rounded-lg p-4">
             <div className="flex justify-between items-center mb-3">
               <div>
@@ -419,6 +675,9 @@ interface ConflictDashboardProps {
   filters: Record<string, boolean>;
   onToggleFilter: (pairType: string) => void;
   filteredEvents: ConflictEvent[];
+  severityThreshold: number;
+  onSeverityChange: (value: number) => void;
+  onRefresh: () => Promise<void>;
 }
 
 const ConflictDashboard: React.FC<ConflictDashboardProps> = ({
@@ -426,6 +685,9 @@ const ConflictDashboard: React.FC<ConflictDashboardProps> = ({
   filters,
   onToggleFilter,
   filteredEvents,
+  severityThreshold,
+  onSeverityChange,
+  onRefresh,
 }) => {
   if (!data) {
     return <div className="text-slate-500">Sin métricas de conflictos registradas.</div>;
@@ -434,17 +696,14 @@ const ConflictDashboard: React.FC<ConflictDashboardProps> = ({
   const pairTypes = Object.keys(filters);
   const mapWidth = 640;
   const mapHeight = 360;
-  const events = filteredEvents;
 
-  const extents = events.reduce(
-    (acc, event) => {
-      return {
-        minX: Math.min(acc.minX, event.x),
-        maxX: Math.max(acc.maxX, event.x),
-        minY: Math.min(acc.minY, event.y),
-        maxY: Math.max(acc.maxY, event.y),
-      };
-    },
+  const extents = filteredEvents.reduce(
+    (acc, event) => ({
+      minX: Math.min(acc.minX, event.x),
+      maxX: Math.max(acc.maxX, event.x),
+      minY: Math.min(acc.minY, event.y),
+      maxY: Math.max(acc.maxY, event.y),
+    }),
     { minX: 0, maxX: 1, minY: 0, maxY: 1 }
   );
   const scaleX = extents.maxX - extents.minX || 1;
@@ -456,13 +715,19 @@ const ConflictDashboard: React.FC<ConflictDashboardProps> = ({
         <div>
           <h2 className="text-xl font-semibold text-slate-900">Conflictos TTC &amp; PET</h2>
           <p className="text-sm text-slate-500">
-            Los puntos muestran la ubicación aproximada de conflictos detectados (TTC &lt; 1.5 s).
-            Ajusta los filtros por tipo de interacción para resaltar casos relevantes.
+            Ajusta filtros por tipo de interacción y umbral TTC para resaltar los eventos más severos.
           </p>
         </div>
-        <div className="bg-slate-100 rounded-lg px-4 py-3 text-sm text-slate-700">
-          Total detectado:{" "}
-          <span className="font-semibold text-slate-900">{data.total_conflicts}</span>
+        <div className="flex flex-col items-end gap-2">
+          <div className="bg-slate-100 rounded-lg px-4 py-3 text-sm text-slate-700">
+            Total detectado: <span className="font-semibold text-slate-900">{data.total_conflicts}</span>
+          </div>
+          <button
+            onClick={onRefresh}
+            className="text-xs text-blue-600 hover:text-blue-800"
+          >
+            Recalcular análisis
+          </button>
         </div>
       </header>
 
@@ -479,6 +744,21 @@ const ConflictDashboard: React.FC<ConflictDashboardProps> = ({
         ))}
       </div>
 
+      <div className="flex items-center gap-4">
+        <label className="text-sm text-slate-600 flex items-center gap-2">
+          Umbral TTC (s)
+          <input
+            type="range"
+            min={0.5}
+            max={3.0}
+            step={0.1}
+            value={severityThreshold}
+            onChange={(event) => onSeverityChange(parseFloat(event.target.value))}
+          />
+          <span className="font-semibold text-slate-800">{severityThreshold.toFixed(1)}</span>
+        </label>
+      </div>
+
       <div className="relative border border-slate-200 rounded-xl overflow-hidden">
         <div
           className="relative"
@@ -489,11 +769,12 @@ const ConflictDashboard: React.FC<ConflictDashboardProps> = ({
           }}
         >
           <div className="absolute inset-12 border-2 border-slate-600/60 rounded-lg pointer-events-none" />
-          {events.map((event, idx) => {
+          {filteredEvents.map((event, idx) => {
             const x = ((event.x - extents.minX) / scaleX) * mapWidth;
             const y = ((event.y - extents.minY) / scaleY) * mapHeight;
-            const severity = Math.min(event.severity, 5);
-            const size = 6 + severity * 3;
+            const intensity = Math.min(1, 1 / Math.max(event.ttc_min, 0.1));
+            const size = 6 + intensity * 12;
+            const baseColor = event.pair_type === "vehicle-peaton" ? "255, 99, 132" : "59, 130, 246";
             return (
               <div
                 key={`${event.track_id_1}-${event.track_id_2}-${idx}`}
@@ -503,17 +784,17 @@ const ConflictDashboard: React.FC<ConflictDashboardProps> = ({
                   top: y - size / 2,
                   width: size,
                   height: size,
-                  backgroundColor: event.pair_type === "vehicle-peaton" ? "#f87171" : "#60a5fa",
-                  opacity: 0.8,
+                  backgroundColor: `rgba(${baseColor}, ${0.35 + intensity * 0.4})`,
+                  boxShadow: `0 0 ${8 + intensity * 12}px rgba(${baseColor}, ${0.5})`,
                 }}
                 title={`Tracks ${event.track_id_1} & ${event.track_id_2} · TTC ${event.ttc_min.toFixed(2)}s`}
               />
             );
           })}
         </div>
-        {events.length === 0 && (
+        {filteredEvents.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">
-            No hay conflictos activos con los filtros seleccionados.
+            No hay conflictos con los filtros actuales.
           </div>
         )}
       </div>
@@ -521,21 +802,238 @@ const ConflictDashboard: React.FC<ConflictDashboardProps> = ({
   );
 };
 
-interface DownloadsPanelProps {
-  state: "idle" | "loading";
-  message: string | null;
-  onGenerate: (type: "csv" | "excel" | "pdf") => void;
+interface ViolationsPanelProps {
+  data: ViolationsResponse | null;
+  forbiddenInput: string;
+  onForbiddenChange: (value: string, origin: ForbiddenFormAction) => void;
+  onSaveForbidden: () => void;
+  saving: boolean;
 }
 
-const DownloadsPanel: React.FC<DownloadsPanelProps> = ({ state, message, onGenerate }) => {
+const ViolationsPanel: React.FC<ViolationsPanelProps> = ({ data, forbiddenInput, onForbiddenChange, onSaveForbidden, saving }) => {
+  return (
+    <div className="space-y-6">
+      <header>
+        <h2 className="text-xl font-semibold text-slate-900">Maniobras indebidas detectadas</h2>
+        <p className="text-sm text-slate-500">
+          Ajusta los movimientos RILSA prohibidos y recalcúla el resumen para detectar infracciones en segundos.
+        </p>
+      </header>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-700 mb-2">Lista de movimientos prohibidos</h3>
+          <textarea
+            value={forbiddenInput}
+            onChange={(event) => onForbiddenChange(event.target.value, "input")}
+            rows={8}
+            className="w-full border border-slate-200 rounded-lg p-3 font-mono text-sm"
+            placeholder="Ejemplo: 5:Giro izquierda restringido"
+          />
+          <p className="text-xs text-slate-500 mt-1">
+            Separa códigos por línea o coma. Puedes añadir descripción usando ":".
+          </p>
+          <button
+            onClick={onSaveForbidden}
+            disabled={saving}
+            className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-400"
+          >
+            {saving ? "Guardando…" : "Guardar y recalcular"}
+          </button>
+        </div>
+
+        <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+          <h3 className="text-sm font-semibold text-slate-700">Resumen detectado</h3>
+          {data && data.total_violations > 0 ? (
+            <>
+              <p className="text-sm text-slate-600 mt-2">
+                Total de maniobras indebidas: <span className="font-semibold text-slate-900">{data.total_violations}</span>
+              </p>
+              <table className="mt-3 w-full text-xs">
+                <thead className="bg-slate-100">
+                  <tr>
+                    <th className="left px-3 py-2 text-left font-semibold text-slate-600">RILSA</th>
+                    <th className="left px-3 py-2 text-left font-semibold text-slate-600">Descripción</th>
+                    <th className="px-3 py-2 text-right font-semibold text-slate-600">Conteo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.by_movement.map((item) => (
+                    <tr key={item.rilsa_code} className="border-t border-slate-200">
+                      <td className="px-3 py-2 font-mono text-slate-700">{item.rilsa_code}</td>
+                      <td className="px-3 py-2 text-slate-600">{item.description || "—"}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-slate-800">{item.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          ) : (
+            <p className="text-sm text-slate-500 mt-2">No se detectaron maniobras indebidas con la configuración actual.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface SettingsPanelProps {
+  settings: AnalysisSettings | null;
+  draft: AnalysisSettings | null;
+  onFieldChange: <K extends keyof AnalysisSettings>(key: K, value: AnalysisSettings[K]) => void;
+  onSave: () => void;
+  onReset: () => void;
+  saving: boolean;
+}
+
+const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, draft, onFieldChange, onSave, onReset, saving }) => {
+  const currentDraft = draft || settings || DEFAULT_SETTINGS;
+  const currentSettings = settings || DEFAULT_SETTINGS;
+
+  return (
+    <div className="space-y-6">
+      <header>
+        <h2 className="text-xl font-semibold text-slate-900">Configuración avanzada de análisis</h2>
+        <p className="text-sm text-slate-500">
+          Estos parámetros afectan los cálculos de volúmenes, filtros de trayectoria, conflictos TTC y detección de maniobras indebidas.
+        </p>
+      </header>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="space-y-4">
+          <label className="block text-sm text-slate-600">
+            Intervalo de consolidación (min)
+            <select
+              value={currentDraft.interval_minutes}
+              onChange={(event) => onFieldChange("interval_minutes", Number(event.target.value))}
+              className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2"
+            >
+              {[5, 10, 12, 15, 20, 30].map((value) => (
+                <option key={value} value={value}>
+                  {value} minutos
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block text-sm text-slate-600">
+            Longitud mínima de trayectoria (m)
+            <input
+              type="number"
+              min={1}
+              step={0.5}
+              value={currentDraft.min_length_m}
+              onChange={(event) => onFieldChange("min_length_m", Number(event.target.value))}
+              className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2"
+            />
+          </label>
+
+          <label className="block text-sm text-slate-600">
+            Máx. cambios de dirección permitidos
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={currentDraft.max_direction_changes}
+              onChange={(event) => onFieldChange("max_direction_changes", Number(event.target.value))}
+              className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2"
+            />
+          </label>
+        </div>
+
+        <div className="space-y-4">
+          <label className="block text-sm text-slate-600">
+            Ratio mínimo desplazamiento neto / recorrido
+            <input
+              type="number"
+              min={0}
+              max={1}
+              step={0.05}
+              value={currentDraft.min_net_over_path_ratio}
+              onChange={(event) => onFieldChange("min_net_over_path_ratio", Number(event.target.value))}
+              className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2"
+            />
+          </label>
+
+          <label className="block text-sm text-slate-600">
+            Umbral TTC para conflictos (s)
+            <input
+              type="number"
+              min={0.5}
+              max={5}
+              step={0.1}
+              value={currentDraft.ttc_threshold_s}
+              onChange={(event) => onFieldChange("ttc_threshold_s", Number(event.target.value))}
+              className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2"
+            />
+          </label>
+
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-xs text-slate-600">
+            <p className="font-semibold text-slate-700 mb-2">Configuración aplicada actualmente</p>
+            <ul className="space-y-1">
+              <li>Intervalo: {currentSettings.interval_minutes} min</li>
+              <li>Longitud mínima: {currentSettings.min_length_m} m</li>
+              <li>Máx. cambios dirección: {currentSettings.max_direction_changes}</li>
+              <li>Ratio neto: {currentSettings.min_net_over_path_ratio}</li>
+              <li>TTC mínimo: {currentSettings.ttc_threshold_s} s</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex gap-3">
+        <button
+          onClick={onSave}
+          disabled={saving}
+          className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white px-4 py-2 rounded-lg font-semibold"
+        >
+          {saving ? "Guardando…" : "Guardar y recalcular"}
+        </button>
+        <button
+          onClick={onReset}
+          disabled={saving}
+          className="border border-slate-200 px-4 py-2 rounded-lg text-slate-600 hover:border-blue-200 hover:text-blue-600"
+        >
+          Restablecer
+        </button>
+      </div>
+    </div>
+  );
+};
+
+interface DownloadsPanelProps {
+  state: DownloadState;
+  message: string | null;
+  onGenerate: (type: "csv" | "excel" | "pdf") => void;
+  totalVehicles: number;
+  totalViolations: number;
+  totalConflicts: number;
+}
+
+const DownloadsPanel: React.FC<DownloadsPanelProps> = ({ state, message, onGenerate, totalVehicles, totalViolations, totalConflicts }) => {
   return (
     <div className="space-y-6">
       <header>
         <h2 className="text-xl font-semibold text-slate-900">Descargas de reportes</h2>
         <p className="text-sm text-slate-500">
-          Genera archivos consolidados listos para compartir. El backend produce el reporte y lo descarga automáticamente.
+          Genera archivos consolidados con la configuración actual: CSV detallado, Excel multi-hoja y PDF ejecutivo con resumen de volúmenes, velocidades, conflictos y maniobras indebidas.
         </p>
       </header>
+
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 grid md:grid-cols-3 gap-4 text-sm text-slate-600">
+        <div>
+          <p className="font-semibold text-slate-800">Total vehículos</p>
+          <p>{formatNumber.format(totalVehicles)}</p>
+        </div>
+        <div>
+          <p className="font-semibold text-slate-800">Maniobras indebidas</p>
+          <p>{formatNumber.format(totalViolations)}</p>
+        </div>
+        <div>
+          <p className="font-semibold text-slate-800">Conflictos TTC</p>
+          <p>{formatNumber.format(totalConflicts)}</p>
+        </div>
+      </div>
 
       <div className="grid md:grid-cols-3 gap-4">
         <DownloadCard
@@ -554,7 +1052,7 @@ const DownloadsPanel: React.FC<DownloadsPanelProps> = ({ state, message, onGener
         />
         <DownloadCard
           title="PDF ejecutivo"
-          description="Resumen con tablas, velocidades y conteo de conflictos para entregar."
+          description="Portada + resumen de volúmenes, velocidades, conflictos y maniobras indebidas."
           emoji="📄"
           disabled={state === "loading"}
           onClick={() => onGenerate("pdf")}

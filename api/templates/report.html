@@ -4,79 +4,73 @@
     <meta charset="UTF-8" />
     <title>Reporte de Aforo - {{ dataset_id }}</title>
     <style>
-      body { font-family: Arial, sans-serif; font-size: 11px; color: #222; }
-      h1, h2, h3 { color: #1a1a1a; }
-      table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
-      th, td { border: 1px solid #bbb; padding: 4px 6px; text-align: right; }
-      th { background-color: #f3f3f3; }
-      td.left { text-align: left; }
-      .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
-      .card { border: 1px solid #ddd; padding: 8px; border-radius: 4px; background-color: #fafafa; }
-      .card h3 { margin: 0 0 4px 0; font-size: 12px; }
+      body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #1e293b; line-height: 1.5; }
+      h1, h2, h3 { color: #0f172a; margin-bottom: 8px; }
+      h1 { font-size: 24px; }
+      h2 { font-size: 18px; margin-top: 24px; }
+      h3 { font-size: 14px; margin-top: 16px; }
+      p { margin: 4px 0; }
+      .muted { color: #64748b; }
+      .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 16px 0; }
+      .card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background-color: #f8fafc; }
+      .card h3 { margin: 0 0 6px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #334155; }
+      .card strong { font-size: 18px; }
+      table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+      th, td { border: 1px solid #cbd5f5; padding: 6px 8px; text-align: right; }
+      th { background-color: #eff6ff; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: #1d4ed8; }
+      td.left, th.left { text-align: left; }
+      .section { page-break-inside: avoid; }
+      .separator { height: 1px; background: linear-gradient(90deg, #1d4ed8, transparent); margin: 24px 0; border: none; }
+      .list-inline { display: flex; gap: 12px; flex-wrap: wrap; }
+      .badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 999px; background-color: #e0f2fe; color: #0369a1; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+      .page-break { page-break-before: always; }
     </style>
   </head>
   <body>
-    <h1>Reporte de Aforo</h1>
-    <p><strong>Dataset:</strong> {{ dataset_id }} | <strong>Intervalo:</strong> {{ interval_minutes }} minutos</p>
+    <!-- Portada -->
+    <section class="section">
+      <h1>Reporte Ejecutivo de Aforo</h1>
+      <p class="muted">Dataset: <strong>{{ dataset_id }}</strong></p>
+      <p class="muted">Generado el: {{ generated_at }}</p>
 
-    <div class="summary-grid">
-      <div class="card">
-        <h3>Conflictos detectados</h3>
-        <p style="font-size: 14px; margin: 0;"><strong>{{ conflicts_summary.total_conflicts }}</strong></p>
+      <div class="summary-grid">
+        <div class="card">
+          <h3>Total de vehículos</h3>
+          <strong>{{ overview.total_vehicles }}</strong>
+          <p class="muted">Intervalos de {{ overview.interval_minutes }} minutos</p>
+        </div>
+        <div class="card">
+          <h3>Pico horario</h3>
+          <strong>{{ overview.peak_interval_total }}</strong>
+          <p class="muted">Intervalo: {{ overview.peak_interval_label }}</p>
+        </div>
+        <div class="card">
+          <h3>Conflictos TTC</h3>
+          <strong>{{ overview.total_conflicts }}</strong>
+          <p class="muted">TTC mínimo: {{ overview.minimum_ttc or '—' }} s</p>
+        </div>
+        <div class="card">
+          <h3>Maniobras indebidas</h3>
+          <strong>{{ overview.total_violations }}</strong>
+          <p class="muted">Configuración avanzada aplicada</p>
+        </div>
       </div>
-      <div class="card">
-        <h3>Velocidad media (km/h)</h3>
-        <p style="margin: 0;">
-          {% if speed_summary %}
-            {% set total = [] %}
-            {% for stats in speed_summary.values() %}
-              {% set _ = total.append(stats.mean_kmh) %}
-            {% endfor %}
-            <strong>{{ (total | sum / total | length) | round(2) }}</strong>
-          {% else %}
-            No disponible
-          {% endif %}
-        </p>
-      </div>
-      <div class="card">
-        <h3>Movimientos analizados</h3>
-        <p style="font-size: 14px; margin: 0;"><strong>{{ movements | length }}</strong></p>
-      </div>
-    </div>
 
-    <h2>Volúmenes totales por intervalo</h2>
-    <table>
-      <thead>
-        <tr>
-          <th class="left">Intervalo (min)</th>
-          <th>Autos</th>
-          <th>Buses</th>
-          <th>Camiones</th>
-          <th>Motos</th>
-          <th>Bicis</th>
-          <th>Peatones</th>
-          <th>Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in totals %}
-          <tr>
-            <td class="left">{{ row.interval_start }} - {{ row.interval_end }}</td>
-            <td>{{ row.autos }}</td>
-            <td>{{ row.buses }}</td>
-            <td>{{ row.camiones }}</td>
-            <td>{{ row.motos }}</td>
-            <td>{{ row.bicis }}</td>
-            <td>{{ row.peatones }}</td>
-            <td>{{ row.total }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+      <h2>Configuración avanzada utilizada</h2>
+      <div class="list-inline">
+        <span class="badge">Intervalo {{ analysis_settings.interval_minutes }} min</span>
+        <span class="badge">Longitud ≥ {{ analysis_settings.min_length_m }} m</span>
+        <span class="badge">Cambios dirección ≤ {{ analysis_settings.max_direction_changes }}</span>
+        <span class="badge">Ratio neto ≥ {{ analysis_settings.min_net_over_path_ratio }}</span>
+        <span class="badge">TTC &lt; {{ analysis_settings.ttc_threshold_s }} s</span>
+      </div>
+      <hr class="separator" />
+    </section>
 
-    <h2>Resumen de movim&nbsp;entos RILSA</h2>
-    {% for rilsa_code, rows in movements.items() %}
-      <h3>Movimiento {{ rilsa_code }}</h3>
+    <!-- Volúmenes totales -->
+    <section class="section">
+      <h2>Volúmenes totales por intervalo</h2>
+      {% if totals %}
       <table>
         <thead>
           <tr>
@@ -91,7 +85,46 @@
           </tr>
         </thead>
         <tbody>
-          {% for row in rows %}
+          {% for row in totals %}
+          <tr>
+            <td class="left">{{ row.interval_start }} - {{ row.interval_end }}</td>
+            <td>{{ row.autos }}</td>
+            <td>{{ row.buses }}</td>
+            <td>{{ row.camiones }}</td>
+            <td>{{ row.motos }}</td>
+            <td>{{ row.bicis }}</td>
+            <td>{{ row.peatones }}</td>
+            <td><strong>{{ row.total }}</strong></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted">No se registraron volúmenes en el intervalo seleccionado.</p>
+      {% endif %}
+    </section>
+
+    <!-- Resumen por movimiento -->
+    <section class="section">
+      <h2>Movimientos RILSA</h2>
+      {% if movements %}
+        {% for rilsa_code, rows in movements.items() %}
+        <h3>Movimiento {{ rilsa_code }}</h3>
+        <table>
+          <thead>
+            <tr>
+              <th class="left">Intervalo</th>
+              <th>Autos</th>
+              <th>Buses</th>
+              <th>Camiones</th>
+              <th>Motos</th>
+              <th>Bicis</th>
+              <th>Peatones</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
             <tr>
               <td class="left">{{ row.interval_start }} - {{ row.interval_end }}</td>
               <td>{{ row.autos }}</td>
@@ -100,22 +133,30 @@
               <td>{{ row.motos }}</td>
               <td>{{ row.bicis }}</td>
               <td>{{ row.peatones }}</td>
-              <td>{{ row.total }}</td>
+              <td><strong>{{ row.total }}</strong></td>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% endfor %}
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endfor %}
+      {% else %}
+        <p class="muted">Aún no se han generado movimientos RILSA para este dataset.</p>
+      {% endif %}
+    </section>
 
-    <h2>Resumen de velocidades</h2>
-    {% if speed_summary %}
+    <div class="page-break"></div>
+
+    <!-- Velocidades -->
+    <section class="section">
+      <h2>Resumen de velocidades</h2>
+      {% if speed_summary %}
       <table>
         <thead>
           <tr>
             <th class="left">Movimiento</th>
-            <th>Clase</th>
+            <th class="left">Clase</th>
             <th>Count</th>
-            <th>Media</th>
+            <th>Media (km/h)</th>
             <th>Mediana</th>
             <th>P85</th>
             <th>Mín</th>
@@ -124,23 +165,106 @@
         </thead>
         <tbody>
           {% for key, stats in speed_summary.items() %}
-            {% set rilsa_code, vehicle_class = key %}
-            <tr>
-              <td class="left">{{ rilsa_code }}</td>
-              <td class="left">{{ vehicle_class }}</td>
-              <td>{{ stats.count }}</td>
-              <td>{{ stats.mean_kmh | round(2) }}</td>
-              <td>{{ stats.median_kmh | round(2) }}</td>
-              <td>{{ stats.p85_kmh | round(2) }}</td>
-              <td>{{ stats.min_kmh | round(2) }}</td>
-              <td>{{ stats.max_kmh | round(2) }}</td>
-            </tr>
+          {% set rilsa_code, vehicle_class = key %}
+          <tr>
+            <td class="left">{{ rilsa_code }}</td>
+            <td class="left">{{ vehicle_class }}</td>
+            <td>{{ stats.count }}</td>
+            <td>{{ stats.mean_kmh | round(2) }}</td>
+            <td>{{ stats.median_kmh | round(2) }}</td>
+            <td>{{ stats.p85_kmh | round(2) }}</td>
+            <td>{{ stats.min_kmh | round(2) }}</td>
+            <td>{{ stats.max_kmh | round(2) }}</td>
+          </tr>
           {% endfor %}
         </tbody>
       </table>
-    {% else %}
-      <p>No se encontraron velocidades suficientes para el resumen.</p>
-    {% endif %}
+      {% else %}
+      <p class="muted">No se registraron trayectorias suficientes para calcular velocidades.</p>
+      {% endif %}
+
+      <h3>Resumen por clase vehicular</h3>
+      {% if speed_by_class %}
+      <table>
+        <thead>
+          <tr>
+            <th class="left">Clase</th>
+            <th>Trayectorias</th>
+            <th>Media (km/h)</th>
+            <th>P85 (km/h)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in speed_by_class %}
+          <tr>
+            <td class="left">{{ item.vehicle_class }}</td>
+            <td>{{ item.count }}</td>
+            <td>{{ item.mean_kmh | round(2) }}</td>
+            <td>{{ item.p85_kmh | round(2) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted">Sin datos agregados por clase vehicular.</p>
+      {% endif %}
+    </section>
+
+    <!-- Conflictos -->
+    <section class="section">
+      <h2>Conflictos TTC/PET</h2>
+      {% if conflicts_events %}
+      <table>
+        <thead>
+          <tr>
+            <th class="left">Tiempo (s)</th>
+            <th>TTC mín (s)</th>
+            <th>Pareja</th>
+            <th>Severidad</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for event in conflicts_events %}
+          <tr>
+            <td class="left">{{ event.time_sec | round(2) }}</td>
+            <td>{{ event.ttc_min | round(2) }}</td>
+            <td class="left">{{ event.pair_type }}</td>
+            <td>{{ event.severity | round(2) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted">No se detectaron conflictos bajo el umbral configurado.</p>
+      {% endif %}
+    </section>
+
+    <!-- Violaciones -->
+    <section class="section">
+      <h2>Maniobras indebidas detectadas</h2>
+      {% if violations %}
+      <table>
+        <thead>
+          <tr>
+            <th class="left">Código RILSA</th>
+            <th class="left">Descripción</th>
+            <th>Conteo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for violation in violations %}
+          <tr>
+            <td class="left">{{ violation.rilsa_code }}</td>
+            <td class="left">{{ violation.description or '—' }}</td>
+            <td>{{ violation.count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted">Con la configuración actual no se detectaron maniobras prohibidas.</p>
+      {% endif %}
+    </section>
   </body>
 </html>
 

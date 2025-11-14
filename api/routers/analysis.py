@@ -62,17 +62,22 @@ from api.models.schemas import (
     SpeedStats,
     SpeedsResponse,
     VolumeRow,
+    ViolationSummary,
+    ViolationsResponse,
     VolumesResponse,
 )
 from api.routers.datasets import _dataset_dir
 from api.services import (
+    ConfigPersistenceService,
     assign_tracks_to_movements,
     calculate_counts_by_interval,
     classify_vehicle,
     detect_conflicts,
     build_volume_tables,
     compute_track_speeds,
+    load_analysis_settings,
     summarize_speeds,
+    summarize_violations,
 )
 
 router = APIRouter(prefix="/api/v1/analysis", tags=["analysis"])
@@ -90,24 +95,37 @@ def _rilsa_map_path(dataset_id: str) -> Path:
     return _dataset_dir(dataset_id) / "rilsa_map.json"
 
 
-@router.get("/{dataset_id}/volumes", response_model=VolumesResponse)
-def get_volumes(dataset_id: str, interval_minutes: int = Query(15, ge=1, le=60)) -> VolumesResponse:
+def _load_analysis_inputs(dataset_id: str):
+    """
+    Carga el parquet normalizado y la configuración de accesos/RILSA.
+    """
     normalized = _normalized_path(dataset_id)
     cardinals_file = _cardinals_path(dataset_id)
     rilsa_file = _rilsa_map_path(dataset_id)
     if not normalized.exists() or not cardinals_file.exists() or not rilsa_file.exists():
-        raise HTTPException(status_code=404, detail="Dataset sin datos normalizados o configuración RILSA.")
-
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset sin datos normalizados o configuración RILSA.",
+        )
     with cardinals_file.open("r", encoding="utf-8") as fh:
         accesses = json.load(fh)
     with rilsa_file.open("r", encoding="utf-8") as fh:
         rilsa_map = json.load(fh)
+    return normalized, accesses, rilsa_map
 
+
+@router.get("/{dataset_id}/volumes", response_model=VolumesResponse)
+def get_volumes(dataset_id: str) -> VolumesResponse:
+    settings = load_analysis_settings(dataset_id)
+    normalized, accesses, rilsa_map = _load_analysis_inputs(dataset_id)
     counts_df = calculate_counts_by_interval(
         normalized,
         accesses,
         rilsa_map,
-        interval_minutes=interval_minutes,
+        interval_minutes=settings.interval_minutes,
+        min_length_m=settings.min_length_m,
+        max_direction_changes=settings.max_direction_changes,
+        min_net_over_path_ratio=settings.min_net_over_path_ratio,
     )
     tables = build_volume_tables(counts_df)
 
@@ -123,7 +141,7 @@ def get_volumes(dataset_id: str, interval_minutes: int = Query(15, ge=1, le=60))
 
     return VolumesResponse(
         dataset_id=dataset_id,
-        interval_minutes=interval_minutes,
+        interval_minutes=settings.interval_minutes,
         totals_by_interval=totals_rows,
         movements=movement_tables,
     )
@@ -134,18 +152,9 @@ def get_speeds(
     dataset_id: str,
     fps: float = Query(30.0, gt=0),
     pixel_to_meter: float = Query(1.0, gt=0),
-    min_length_m: float = Query(5.0, gt=0),
 ) -> SpeedsResponse:
-    normalized = _normalized_path(dataset_id)
-    cardinals_file = _cardinals_path(dataset_id)
-    rilsa_file = _rilsa_map_path(dataset_id)
-    if not normalized.exists() or not cardinals_file.exists() or not rilsa_file.exists():
-        raise HTTPException(status_code=404, detail="Dataset sin datos normalizados o configuración RILSA.")
-
-    with cardinals_file.open("r", encoding="utf-8") as fh:
-        accesses = json.load(fh)
-    with rilsa_file.open("r", encoding="utf-8") as fh:
-        rilsa_map = json.load(fh)
+    settings = load_analysis_settings(dataset_id)
+    normalized, accesses, rilsa_map = _load_analysis_inputs(dataset_id)
 
     df = pd.read_parquet(normalized)
     if df.empty:
@@ -156,7 +165,9 @@ def get_speeds(
         accesses,
         rilsa_map,
         fps=fps,
-        min_length_m=min_length_m,
+        min_length_m=settings.min_length_m,
+        max_direction_changes=settings.max_direction_changes,
+        min_net_over_path_ratio=settings.min_net_over_path_ratio,
     )
     meta_df = meta_df[["track_id", "rilsa_code", "vehicle_class"]]
     speeds_df = compute_track_speeds(filtered, fps=fps, pixel_to_meter=pixel_to_meter)
@@ -179,9 +190,10 @@ def get_speeds(
 def get_conflicts(
     dataset_id: str,
     fps: float = Query(30.0, gt=0),
-    ttc_threshold: float = Query(1.5, gt=0),
     distance_threshold: float = Query(2.0, gt=0),
+    ttc_threshold: float | None = Query(None, gt=0),
 ) -> ConflictsResponse:
+    settings = load_analysis_settings(dataset_id)
     normalized = _normalized_path(dataset_id)
     if not normalized.exists():
         raise HTTPException(status_code=404, detail="Dataset sin datos normalizados.")
@@ -196,7 +208,7 @@ def get_conflicts(
         df,
         fps=fps,
         distance_threshold=distance_threshold,
-        ttc_threshold=ttc_threshold,
+        ttc_threshold_s=ttc_threshold if ttc_threshold is not None else settings.ttc_threshold_s,
     )
     events = [
         ConflictEvent(
@@ -213,4 +225,47 @@ def get_conflicts(
         for conflict in conflicts_list
     ]
     return ConflictsResponse(dataset_id=dataset_id, total_conflicts=len(events), events=events)
+
+
+@router.get("/{dataset_id}/violations", response_model=ViolationsResponse)
+def get_violations(dataset_id: str) -> ViolationsResponse:
+    """
+    Devuelve la cantidad de maniobras indebidas detectadas para los movimientos prohibidos.
+    """
+    normalized, accesses, rilsa_map = _load_analysis_inputs(dataset_id)
+    config = ConfigPersistenceService.load_config(dataset_id)
+    forbidden = config.forbidden_movements if config else []
+    if not forbidden:
+        return ViolationsResponse(
+            dataset_id=dataset_id,
+            total_violations=0,
+            by_movement=[],
+        )
+
+    settings = load_analysis_settings(dataset_id)
+
+    df = pd.read_parquet(normalized)
+    if df.empty:
+        return ViolationsResponse(
+            dataset_id=dataset_id,
+            total_violations=0,
+            by_movement=[],
+        )
+
+    _, meta_df = assign_tracks_to_movements(
+        df,
+        accesses,
+        rilsa_map,
+        min_length_m=settings.min_length_m,
+        max_direction_changes=settings.max_direction_changes,
+        min_net_over_path_ratio=settings.min_net_over_path_ratio,
+    )
+    summary = summarize_violations(meta_df, forbidden)
+    by_movement = [ViolationSummary(**item) for item in summary["by_movement"]]
+
+    return ViolationsResponse(
+        dataset_id=dataset_id,
+        total_violations=summary["total_violations"],
+        by_movement=by_movement,
+    )
 

@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from api.models.config import AccessConfig
+
 
 class DatasetMetadata(BaseModel):
     """Metadata básica de un dataset almacenado."""
@@ -127,3 +129,25 @@ class ConflictsResponse(BaseModel):
     total_conflicts: int
     events: List[ConflictEvent]
 
+
+class ViolationSummary(BaseModel):
+    """Resumen de violaciones por movimiento RILSA prohibido."""
+
+    rilsa_code: str
+    description: str
+    count: int
+
+
+class ViolationsResponse(BaseModel):
+    """Respuesta del endpoint /analysis/{dataset_id}/violations."""
+
+    dataset_id: str
+    total_violations: int
+    by_movement: List[ViolationSummary]
+
+
+class AccessGenerationResponse(BaseModel):
+    """Respuesta del endpoint /config/{dataset_id}/generate_accesses."""
+
+    dataset_id: str
+    accesses: List[AccessConfig]

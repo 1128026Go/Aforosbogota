@@ -37,7 +37,7 @@ def detect_conflicts(
     df: pd.DataFrame,
     fps: float = 30.0,
     distance_threshold: float = 2.0,
-    ttc_threshold: float = 1.5,
+    ttc_threshold_s: float = 1.5,
 ) -> List[Conflict]:
     """
     Detecta conflictos basados en TTC < ttc_threshold.
@@ -82,7 +82,7 @@ def detect_conflicts(
                 ttc = distance / (delta / dt)
                 ttc_min = min(ttc_min, ttc)
 
-            if ttc_min == float("inf") or ttc_min > ttc_threshold:
+            if ttc_min == float("inf") or ttc_min > ttc_threshold_s:
                 continue
 
             time_sec = float(frame_id) / fps

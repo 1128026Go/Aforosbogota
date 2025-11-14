@@ -1,8 +1,8 @@
 /**
  * App Component - Main router and layout for AFOROS RILSA v3.0.2
  */
-import React, { useState } from "react";
-import { BrowserRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate, useLocation } from "react-router-dom";
 import StepNavigation, { StepKey } from "@/components/StepNavigation";
 
 // Import pages (will create them next)
@@ -14,6 +14,7 @@ import "./App.css";
 
 const AppContent: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [datasetId, setDatasetId] = useState<string | null>(null);
 
   // Determine current step based on route
@@ -34,6 +35,17 @@ const AppContent: React.FC = () => {
     // Auto-navigate to config step
     navigate(`/datasets/${newDatasetId}/config`);
   };
+
+  useEffect(() => {
+    const match = location.pathname.match(/^\/datasets\/([^/]+)\/(config|results)/);
+    const matchedDatasetId = match?.[1];
+    if (matchedDatasetId && matchedDatasetId !== datasetId) {
+      setDatasetId(matchedDatasetId);
+    }
+    if (!matchedDatasetId && datasetId !== null) {
+      setDatasetId(null);
+    }
+  }, [location, datasetId]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -64,7 +76,8 @@ const AppContent: React.FC = () => {
           />
 
           {/* Default redirect */}
-          <Route path="/" element={<UploadPage onDatasetCreated={handleDatasetCreated} />} />
+          <Route path="/" element={<Navigate to="/datasets/upload" replace />} />
+          <Route path="*" element={<Navigate to="/datasets/upload" replace />} />
         </Routes>
       </div>
     </div>

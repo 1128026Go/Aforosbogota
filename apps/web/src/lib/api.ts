@@ -3,7 +3,6 @@
  */
 import {
   DatasetConfig,
-  AccessConfig,
   TrajectoryPoint,
   AccessPolygonUpdate,
   UploadResponse,
@@ -11,6 +10,10 @@ import {
   VolumesResponse,
   SpeedsResponse,
   ConflictsResponse,
+  AnalysisSettings,
+  ForbiddenMovement,
+  ViolationsResponse,
+  AccessGenerationResponse,
 } from "@/types";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3004";
@@ -64,24 +67,36 @@ const api = {
       trajectories?: TrajectoryPoint[];
       imageWidth?: number;
       imageHeight?: number;
+      maxSamples?: number;
     }
-  ): Promise<AccessConfig[]> {
-    const params = new URLSearchParams();
-    if (options?.imageWidth) params.append("image_width", options.imageWidth.toString());
-    if (options?.imageHeight) params.append("image_height", options.imageHeight.toString());
+  ): Promise<AccessGenerationResponse> {
+    const payload: Record<string, unknown> = {};
+
+    if (options?.trajectories && options.trajectories.length > 0) {
+      payload.trajectories = options.trajectories;
+    }
+    if (typeof options?.imageWidth === "number") {
+      payload.image_width = options.imageWidth;
+    }
+    if (typeof options?.imageHeight === "number") {
+      payload.image_height = options.imageHeight;
+    }
+    if (typeof options?.maxSamples === "number") {
+      payload.max_samples = options.maxSamples;
+    }
 
     const response = await fetch(
-      `${API_BASE_URL}/api/v1/config/generate_accesses/${datasetId}?${params.toString()}`,
+      `${API_BASE_URL}/api/v1/config/${datasetId}/generate_accesses`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          trajectories: options?.trajectories || [],
-        }),
+        body: Object.keys(payload).length ? JSON.stringify(payload) : undefined,
       }
     );
     if (!response.ok) {
-      throw new Error(`Failed to generate accesses: ${response.statusText}`);
+      const detail = await response.json().catch(() => null);
+      const message = detail?.detail || response.statusText;
+      throw new Error(`Failed to generate accesses: ${message}`);
     }
     return response.json();
   },
@@ -118,12 +133,52 @@ const api = {
     return response.json();
   },
 
-  // ========== VALIDATION (Step 3: Statistical Validation) ==========
+  async getAnalysisSettings(datasetId: string): Promise<AnalysisSettings> {
+    const response = await fetch(`${API_BASE_URL}/api/v1/config/${datasetId}/analysis_settings`);
+    if (!response.ok) {
+      throw new Error(`Failed to load analysis settings: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  async updateAnalysisSettings(datasetId: string, payload: AnalysisSettings): Promise<AnalysisSettings> {
+    const response = await fetch(`${API_BASE_URL}/api/v1/config/${datasetId}/analysis_settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to update analysis settings: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  async getForbiddenMovements(datasetId: string): Promise<ForbiddenMovement[]> {
+    const response = await fetch(`${API_BASE_URL}/api/v1/config/${datasetId}/forbidden_movements`);
+    if (!response.ok) {
+      throw new Error(`Failed to load forbidden movements: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  async updateForbiddenMovements(
+    datasetId: string,
+    payload: ForbiddenMovement[]
+  ): Promise<ForbiddenMovement[]> {
+    const response = await fetch(`${API_BASE_URL}/api/v1/config/${datasetId}/forbidden_movements`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to update forbidden movements: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
   // ========== REPORTS ==========
-  async getVolumes(datasetId: string, intervalMinutes = 15): Promise<VolumesResponse> {
-    const response = await fetch(
-      `${API_BASE_URL}/api/v1/analysis/${datasetId}/volumes?interval_minutes=${intervalMinutes}`
-    );
+  async getVolumes(datasetId: string): Promise<VolumesResponse> {
+    const response = await fetch(`${API_BASE_URL}/api/v1/analysis/${datasetId}/volumes`);
     if (!response.ok) {
       throw new Error(`Failed to load volumes: ${response.statusText}`);
     }
@@ -132,12 +187,11 @@ const api = {
 
   async getSpeeds(
     datasetId: string,
-    options?: { fps?: number; pixelToMeter?: number; minLength?: number }
+    options?: { fps?: number; pixelToMeter?: number }
   ): Promise<SpeedsResponse> {
     const params = new URLSearchParams();
     if (options?.fps) params.append("fps", options.fps.toString());
     if (options?.pixelToMeter) params.append("pixel_to_meter", options.pixelToMeter.toString());
-    if (options?.minLength) params.append("min_length_m", options.minLength.toString());
     const query = params.toString();
     const url = query
       ? `${API_BASE_URL}/api/v1/analysis/${datasetId}/speeds?${query}`
@@ -168,10 +222,16 @@ const api = {
     return response.json();
   },
 
-  async requestCsvReport(datasetId: string, intervalMinutes = 15): Promise<string> {
-    const response = await fetch(
-      `${API_BASE_URL}/api/v1/reports/${datasetId}/summary?interval_minutes=${intervalMinutes}`
-    );
+  async getViolations(datasetId: string): Promise<ViolationsResponse> {
+    const response = await fetch(`${API_BASE_URL}/api/v1/analysis/${datasetId}/violations`);
+    if (!response.ok) {
+      throw new Error(`Failed to load violations: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  async requestCsvReport(datasetId: string): Promise<string> {
+    const response = await fetch(`${API_BASE_URL}/api/v1/reports/${datasetId}/summary`);
     if (!response.ok) {
       throw new Error(`Failed to generate CSV: ${response.statusText}`);
     }
@@ -179,10 +239,8 @@ const api = {
     return data.file_name;
   },
 
-  async requestExcelReport(datasetId: string, intervalMinutes = 15): Promise<string> {
-    const response = await fetch(
-      `${API_BASE_URL}/api/v1/reports/${datasetId}/excel?interval_minutes=${intervalMinutes}`
-    );
+  async requestExcelReport(datasetId: string): Promise<string> {
+    const response = await fetch(`${API_BASE_URL}/api/v1/reports/${datasetId}/excel`);
     if (!response.ok) {
       throw new Error(`Failed to generate Excel: ${response.statusText}`);
     }
@@ -190,11 +248,8 @@ const api = {
     return data.file_name;
   },
 
-  async requestPdfReport(datasetId: string, params?: { intervalMinutes?: number; fps?: number }): Promise<string> {
-    const search = new URLSearchParams();
-    search.append("interval_minutes", (params?.intervalMinutes ?? 15).toString());
-    if (params?.fps) search.append("fps", params.fps.toString());
-    const response = await fetch(`${API_BASE_URL}/api/v1/reports/${datasetId}/pdf?${search.toString()}`);
+  async requestPdfReport(datasetId: string): Promise<string> {
+    const response = await fetch(`${API_BASE_URL}/api/v1/reports/${datasetId}/pdf`);
     if (!response.ok) {
       throw new Error(`Failed to generate PDF: ${response.statusText}`);
     }
@@ -211,8 +266,6 @@ const api = {
     }
     return response.blob();
   },
-
-  // ========== HISTORY (Step 7: Audit) ==========
 };
 
 export default api;

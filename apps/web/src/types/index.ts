@@ -13,6 +13,11 @@ export interface AccessConfig {
   centroid?: [number, number];
 }
 
+export interface AccessGenerationResponse {
+  dataset_id: string;
+  accesses: AccessConfig[];
+}
+
 export interface RilsaRule {
   code: string;
   origin_access: Cardinal;
@@ -21,10 +26,24 @@ export interface RilsaRule {
   description: string;
 }
 
+export interface AnalysisSettings {
+  interval_minutes: number;
+  min_length_m: number;
+  max_direction_changes: number;
+  min_net_over_path_ratio: number;
+  ttc_threshold_s: number;
+}
+
+export interface ForbiddenMovement {
+  rilsa_code: string;
+  description?: string | null;
+}
+
 export interface DatasetConfig {
   dataset_id: string;
   accesses: AccessConfig[];
   rilsa_rules: RilsaRule[];
+  forbidden_movements?: ForbiddenMovement[];
   created_at: string;
   updated_at: string;
 }
@@ -127,4 +146,16 @@ export interface ConflictsResponse {
   dataset_id: string;
   total_conflicts: number;
   events: ConflictEvent[];
+}
+
+export interface ViolationSummary {
+  rilsa_code: string;
+  description: string;
+  count: number;
+}
+
+export interface ViolationsResponse {
+  dataset_id: string;
+  total_violations: number;
+  by_movement: ViolationSummary[];
 }

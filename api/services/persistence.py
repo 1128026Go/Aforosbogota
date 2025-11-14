@@ -2,9 +2,10 @@
 Service for persisting and loading dataset configurations
 """
 import json
-import os
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
 from api.models.config import DatasetConfig
 
 
@@ -64,6 +65,7 @@ class ConfigPersistenceService:
         config_path = cls.get_config_path(config.dataset_id)
         
         try:
+            config.updated_at = datetime.utcnow()
             with open(config_path, 'w', encoding='utf-8') as f:
                 # Serialize with datetime as ISO format
                 config_dict = json.loads(config.model_dump_json())

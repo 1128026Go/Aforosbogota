@@ -1,9 +1,10 @@
 """
 Pydantic models for dataset configuration
 """
-from typing import List, Tuple, Literal, Optional
-from pydantic import BaseModel, Field
 from datetime import datetime
+from typing import List, Tuple, Literal, Optional
+
+from pydantic import BaseModel, Field
 
 
 class AccessConfig(BaseModel):
@@ -55,6 +56,66 @@ class RilsaRule(BaseModel):
         }
 
 
+class AnalysisSettings(BaseModel):
+    """Parámetros avanzados para el procesamiento de análisis."""
+
+    interval_minutes: int = Field(
+        default=15,
+        ge=1,
+        le=120,
+        description="Duración del intervalo de consolidación en minutos",
+    )
+    min_length_m: float = Field(
+        default=5.0,
+        gt=0,
+        description="Longitud mínima de trayectoria aceptada en metros",
+    )
+    max_direction_changes: int = Field(
+        default=20,
+        ge=0,
+        description="Número máximo de cambios bruscos de dirección permitidos por trayectoria",
+    )
+    min_net_over_path_ratio: float = Field(
+        default=0.2,
+        ge=0.0,
+        le=1.0,
+        description="Relación mínima desplazamiento neto / longitud del recorrido",
+    )
+    ttc_threshold_s: float = Field(
+        default=1.5,
+        gt=0,
+        description="Umbral de TTC (s) para considerar un conflicto",
+    )
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "interval_minutes": 15,
+                "min_length_m": 5.0,
+                "max_direction_changes": 20,
+                "min_net_over_path_ratio": 0.2,
+                "ttc_threshold_s": 1.5,
+            }
+        }
+
+
+class ForbiddenMovement(BaseModel):
+    """Movimiento RILSA marcado como prohibido."""
+
+    rilsa_code: str = Field(..., description="Código RILSA del movimiento prohibido")
+    description: Optional[str] = Field(
+        default=None, description="Descripción corta de la prohibición"
+    )
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "rilsa_code": "5",
+                "description": "Giro izquierda restringido (N → E)",
+            }
+        }
+
+
 class DatasetConfig(BaseModel):
     """Complete configuration for a dataset"""
     
@@ -66,6 +127,10 @@ class DatasetConfig(BaseModel):
     rilsa_rules: List[RilsaRule] = Field(
         default_factory=list,
         description="List of RILSA movement rules"
+    )
+    forbidden_movements: List[ForbiddenMovement] = Field(
+        default_factory=list,
+        description="Lista de movimientos RILSA marcados como prohibidos",
     )
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
