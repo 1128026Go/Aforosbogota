@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Dict
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
@@ -69,12 +70,14 @@ from api.models.schemas import (
 from api.routers.datasets import _dataset_dir
 from api.services import (
     ConfigPersistenceService,
+    MissingTrajectoryDataError,
     assign_tracks_to_movements,
     calculate_counts_by_interval,
     classify_vehicle,
     detect_conflicts,
     build_volume_tables,
     compute_track_speeds,
+    ensure_tracks_available,
     load_analysis_settings,
     summarize_speeds,
     summarize_violations,
@@ -114,19 +117,105 @@ def _load_analysis_inputs(dataset_id: str):
     return normalized, accesses, rilsa_map
 
 
+def _raise_tracking_http_error(exc: MissingTrajectoryDataError) -> None:
+    raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/{dataset_id}/qc_summary")
+def get_qc_summary(dataset_id: str) -> dict:
+    """
+    Proporciona métricas rápidas de control de calidad sobre los conteos.
+    """
+    settings = load_analysis_settings(dataset_id)
+    normalized, accesses, rilsa_map = _load_analysis_inputs(dataset_id)
+    df = pd.read_parquet(normalized)
+    if df.empty:
+        return {
+            "dataset_id": dataset_id,
+            "total_tracks_raw": 0,
+            "counted_tracks": 0,
+            "counts_by_class": {
+                key: 0
+                for key in ["auto", "bus", "camion", "moto", "bici", "peaton", "ignore"]
+            },
+            "counts_by_movement": {},
+        }
+
+    try:
+        ensure_tracks_available(df)
+    except MissingTrajectoryDataError as exc:
+        _raise_tracking_http_error(exc)
+
+    total_tracks_raw = int(df["track_id"].nunique())
+
+    df = df.copy()
+    df["qc_class"] = df["object_class"].map(lambda value: classify_vehicle(str(value)))
+
+    class_counts_series = df["qc_class"].value_counts()
+    desired_order = ["auto", "bus", "camion", "moto", "bici", "peaton", "ignore"]
+    counts_by_class = {cls: int(class_counts_series.get(cls, 0)) for cls in desired_order}
+    for cls, value in class_counts_series.items():
+        if cls not in counts_by_class:
+            counts_by_class[cls] = int(value)
+
+    counted_tracks = int(
+        df.loc[df["qc_class"] != "ignore", "track_id"].nunique()
+    )
+
+    metadata_path = _dataset_dir(dataset_id) / "metadata.json"
+    fps_value = 30.0
+    if metadata_path.exists():
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            if isinstance(metadata.get("fps"), (int, float)):
+                fps_value = float(metadata["fps"])
+        except Exception:  # pragma: no cover
+            fps_value = 30.0
+
+    try:
+        counts_df = calculate_counts_by_interval(
+            normalized,
+            accesses,
+            rilsa_map,
+            interval_minutes=settings.interval_minutes,
+            fps=fps_value,
+            min_length_m=settings.min_length_m,
+            max_direction_changes=settings.max_direction_changes,
+            min_net_over_path_ratio=settings.min_net_over_path_ratio,
+        )
+    except MissingTrajectoryDataError as exc:
+        _raise_tracking_http_error(exc)
+
+    counts_by_movement: Dict[str, int] = {}
+    if not counts_df.empty:
+        grouped = counts_df.groupby("rilsa_code")["count"].sum()
+        counts_by_movement = {str(code): int(count) for code, count in grouped.items()}
+
+    return {
+        "dataset_id": dataset_id,
+        "total_tracks_raw": total_tracks_raw,
+        "counted_tracks": counted_tracks,
+        "counts_by_class": counts_by_class,
+        "counts_by_movement": counts_by_movement,
+    }
+
+
 @router.get("/{dataset_id}/volumes", response_model=VolumesResponse)
 def get_volumes(dataset_id: str) -> VolumesResponse:
     settings = load_analysis_settings(dataset_id)
     normalized, accesses, rilsa_map = _load_analysis_inputs(dataset_id)
-    counts_df = calculate_counts_by_interval(
-        normalized,
-        accesses,
-        rilsa_map,
-        interval_minutes=settings.interval_minutes,
-        min_length_m=settings.min_length_m,
-        max_direction_changes=settings.max_direction_changes,
-        min_net_over_path_ratio=settings.min_net_over_path_ratio,
-    )
+    try:
+        counts_df = calculate_counts_by_interval(
+            normalized,
+            accesses,
+            rilsa_map,
+            interval_minutes=settings.interval_minutes,
+            min_length_m=settings.min_length_m,
+            max_direction_changes=settings.max_direction_changes,
+            min_net_over_path_ratio=settings.min_net_over_path_ratio,
+        )
+    except MissingTrajectoryDataError as exc:
+        _raise_tracking_http_error(exc)
     tables = build_volume_tables(counts_df)
 
     totals_rows = [VolumeRow(**row) for row in tables["totals"]]
@@ -160,15 +249,18 @@ def get_speeds(
     if df.empty:
         return SpeedsResponse(dataset_id=dataset_id, per_movement=[])
 
-    filtered, meta_df = assign_tracks_to_movements(
-        df,
-        accesses,
-        rilsa_map,
-        fps=fps,
-        min_length_m=settings.min_length_m,
-        max_direction_changes=settings.max_direction_changes,
-        min_net_over_path_ratio=settings.min_net_over_path_ratio,
-    )
+    try:
+        filtered, meta_df = assign_tracks_to_movements(
+            df,
+            accesses,
+            rilsa_map,
+            fps=fps,
+            min_length_m=settings.min_length_m,
+            max_direction_changes=settings.max_direction_changes,
+            min_net_over_path_ratio=settings.min_net_over_path_ratio,
+        )
+    except MissingTrajectoryDataError as exc:
+        _raise_tracking_http_error(exc)
     meta_df = meta_df[["track_id", "rilsa_code", "vehicle_class"]]
     speeds_df = compute_track_speeds(filtered, fps=fps, pixel_to_meter=pixel_to_meter)
     summary = summarize_speeds(speeds_df, meta_df)
@@ -201,9 +293,16 @@ def get_conflicts(
     df = pd.read_parquet(normalized)
     if df.empty:
         return ConflictsResponse(dataset_id=dataset_id, total_conflicts=0, events=[])
+    try:
+        ensure_tracks_available(df)
+    except MissingTrajectoryDataError as exc:
+        _raise_tracking_http_error(exc)
 
     df = df.copy()
     df["vehicle_class"] = df["object_class"].map(lambda value: classify_vehicle(str(value)))
+    df = df[df["vehicle_class"] != "ignore"]
+    if df.empty:
+        return ConflictsResponse(dataset_id=dataset_id, total_conflicts=0, events=[])
     conflicts_list = detect_conflicts(
         df,
         fps=fps,
@@ -252,14 +351,17 @@ def get_violations(dataset_id: str) -> ViolationsResponse:
             by_movement=[],
         )
 
-    _, meta_df = assign_tracks_to_movements(
-        df,
-        accesses,
-        rilsa_map,
-        min_length_m=settings.min_length_m,
-        max_direction_changes=settings.max_direction_changes,
-        min_net_over_path_ratio=settings.min_net_over_path_ratio,
-    )
+    try:
+        _, meta_df = assign_tracks_to_movements(
+            df,
+            accesses,
+            rilsa_map,
+            min_length_m=settings.min_length_m,
+            max_direction_changes=settings.max_direction_changes,
+            min_net_over_path_ratio=settings.min_net_over_path_ratio,
+        )
+    except MissingTrajectoryDataError as exc:
+        _raise_tracking_http_error(exc)
     summary = summarize_violations(meta_df, forbidden)
     by_movement = [ViolationSummary(**item) for item in summary["by_movement"]]
 

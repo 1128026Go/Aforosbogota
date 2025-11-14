@@ -11,7 +11,7 @@ import pytest
 
 from api.services.filters import filter_tracks
 from api.services.rilsa_mapping import build_rilsa_rule_map
-from api.services.trajectory_processor import calculate_counts_by_interval
+from api.services.trajectory_processor import calculate_counts_by_interval, assign_tracks_to_movements
 from api.services.speeds import summarize_speeds
 from api.services.conflicts import detect_conflicts
 
@@ -71,6 +71,32 @@ def test_calculate_counts_by_interval(tmp_path: Path, sample_dataframe: pd.DataF
     assert not counts_df.empty
     assert counts_df["count"].sum() == 2
     assert all(col in counts_df.columns for col in ["interval_start", "interval_end", "rilsa_code"])
+
+
+def test_assign_tracks_to_movements_ignores_unknown(tmp_path: Path) -> None:
+    df = pd.DataFrame(
+        {
+            "frame_id": [0, 1, 2, 0, 1, 2, 0, 1],
+            "track_id": [1, 1, 1, 2, 2, 2, 3, 3],
+            "x": [0.0, 0.0, 0.0, 5.0, 5.5, 6.0, 30.0, 32.0],
+            "y": [0.0, 5.0, 10.0, 0.0, -4.0, -12.0, 30.0, 28.0],
+            "object_class": ["car", "car", "car", "truck", "truck", "truck", "dog", "dog"],
+        }
+    )
+    accesses = [
+        {"id": "A1", "x": 0.0, "y": 100.0, "cardinal": "N", "count": 3},
+        {"id": "A2", "x": 0.0, "y": -100.0, "cardinal": "S", "count": 3},
+    ]
+    rilsa_map = build_rilsa_rule_map(accesses)
+    filtered, meta_df = assign_tracks_to_movements(
+        df,
+        accesses,
+        rilsa_map,
+        fps=30.0,
+        min_length_m=3.0,
+    )
+    assert set(meta_df["track_id"]) == {1, 2}
+    assert 3 not in set(filtered["track_id"])
 
 
 def test_summarize_speeds() -> None:

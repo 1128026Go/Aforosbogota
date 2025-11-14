@@ -159,3 +159,11 @@ export interface ViolationsResponse {
   total_violations: number;
   by_movement: ViolationSummary[];
 }
+
+export interface QcSummary {
+  dataset_id: string;
+  total_tracks_raw: number;
+  counted_tracks: number;
+  counts_by_class: Record<string, number>;
+  counts_by_movement: Record<string, number>;
+}

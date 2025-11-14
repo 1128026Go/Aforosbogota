@@ -8,6 +8,19 @@ Sistema completo para cargar trayectorias (PKL), configurar accesos cardinales y
 - **Frontend**: React + Vite (`apps/web/`) con dashboard interactivo en la página de resultados.
 - **Datos**: ficheros PKL normalizados en `data/<dataset_id>/`.
 
+## Formato de datos generado automáticamente
+
+Tras subir un PKL mediante `POST /api/v1/datasets/upload` se crean los siguientes artefactos en `data/<dataset_id>/`:
+
+- `raw.pkl`: archivo original.
+- `normalized.parquet`: columnas obligatorias `frame_id`, `track_id`, `x`, `y`, `object_class`. Cada `track_id` representa un objeto único.
+- `metadata.json`: incluye `frames`, `tracks`, `width`, `height`, `fps` y estado del dataset.
+- `cardinals.json`: lista de accesos con `id`, `cardinal`, `x`, `y`, `count`, `polygon` (si existe).
+- `rilsa_map.json`: mapa RILSA completo (`rules`, `metadata`, `accesses`) usado por análisis de volúmenes, velocidades, conflictos y violaciones.
+
+Solo se contabilizan clases vehiculares y peatones; el resto de etiquetas se marcan como `ignore` y se excluyen de los análisis.
+Cada `track_id` válido se computa una única vez por movimiento/clase en los reportes de volúmenes.
+
 ## Puesta en marcha rápida
 
 ### Backend
@@ -18,10 +31,10 @@ python -m venv ../venv
 ../venv/Scripts/activate  # En Windows
 # source ../venv/bin/activate  # En Linux/Mac
 pip install -r requirements.txt
-uvicorn api.main:app --reload
+uvicorn api.main:app --host 0.0.0.0 --port 3004 --reload
 ```
 
-El backend estará disponible en `http://localhost:8000` y la documentación interactiva en `http://localhost:8000/docs`.
+El backend estará disponible en `http://localhost:3004` y la documentación interactiva en `http://localhost:3004/docs`.
 
 ### Frontend
 
@@ -31,25 +44,40 @@ npm install
 npm run dev
 ```
 
-El frontend estará disponible en `http://localhost:5173` (o el puerto que Vite asigne).
+El frontend estará disponible en `http://localhost:3000`. La configuración de Vite usa `strictPort: true`, por lo que si el puerto 3000 está ocupado el comando `npm run dev` fallará en lugar de elegir otro puerto; libera el puerto o detén la instancia previa antes de reintentar.
+
+### Scripts de arranque rápido (Windows)
+
+En la raíz del repositorio se incluyen:
+
+- `start_backend.bat`: ejecuta `uvicorn api.main:app --host 0.0.0.0 --port 3004 --reload` usando la virtualenv local.
+- `start_frontend.bat`: lanza `npm run dev` dentro de `apps/web` (puerto fijo 3000).
+- `start_dev.bat`: abre dos consolas nuevas y ejecuta los scripts anteriores en paralelo.
+
+Si alguno de los puertos está ocupado, los comandos mostrarán el error “address already in use” y finalizarán sin cambiarse automáticamente a otro puerto.
 
 ### Tests backend
 
 ```bash
 cd api
-pytest ../tests/test_analysis_services.py -v
+pytest ../tests -v
 ```
 
 ## Endpoints principales
 
 | Ruta | Descripción |
 |------|-------------|
-| `POST /api/v1/datasets/upload` | Sube un PKL y crea el dataset (almacena `raw.pkl`). |
+| `POST /api/v1/datasets/upload` | Sube un PKL, genera `normalized.parquet` y `metadata.json`. |
 | `GET /api/v1/datasets` | Lista todos los datasets disponibles. |
-| `POST /api/v1/config/{id}/cardinals` | Configura accesos cardinales del dataset. |
+| `GET /api/v1/config/view/{id}` | Obtiene la configuración completa del dataset (accesos, reglas, prohibiciones). |
+| `POST /api/v1/config/{id}/generate_accesses` | Genera accesos cardinales desde `normalized.parquet` y persiste `cardinals.json`/`rilsa_map.json`. |
+| `PUT /api/v1/config/save_accesses/{id}` | Guarda accesos editados y actualiza `cardinals.json`/`rilsa_map.json`. |
+| `POST /api/v1/config/generate_rilsa/{id}` | Produce reglas RILSA basadas en accesos existentes. |
 | `GET /api/v1/analysis/{id}/volumes` | Tabla por intervalo y movimiento (`VolumesResponse`). |
 | `GET /api/v1/analysis/{id}/speeds` | Estadísticos de velocidad por movimiento/clase. |
 | `GET /api/v1/analysis/{id}/conflicts` | Conflictos TTC/PET con severidad. |
+| `GET /api/v1/analysis/{id}/violations` | Violaciones según movimientos prohibidos. |
+| `GET /api/v1/analysis/{id}/qc_summary` | Resumen QC (tracks brutos vs contados, clases, movimientos). |
 | `GET /api/v1/reports/{id}/summary` | Genera CSV (`interval_start`, `rilsa_code`, `vehicle_class`, `count`). |
 | `GET /api/v1/reports/{id}/excel` | Genera XLSX (hoja `Totales` + `Mov_<código>`). |
 | `GET /api/v1/reports/{id}/pdf` | Genera PDF (tablas, velocidades, conflictos). |
@@ -66,6 +94,7 @@ Parámetros relevantes: `interval_minutes`, `fps`, `pixel_to_meter`, `ttc_thresh
    - Gráfico comparativo de velocidades (media / p85 / máximo).
    - Mapa con conflictos TTC/PET.
    - Botones de descarga para CSV, Excel y PDF (consume los endpoints reales).
+4. **Diagnóstico QC**: la pestaña *Diagnóstico* consulta `/api/v1/analysis/{dataset_id}/qc_summary` para comparar tracks brutos vs. contabilizados, desglose por clase y conteos por movimiento RILSA.
 
 ## Estructura del proyecto
 
@@ -108,7 +137,7 @@ aforos/
 ## Troubleshooting
 
 - **Dependencias PDF**: WeasyPrint requiere librerías del sistema (Cairo, Pango). Instálalas antes de generar PDFs.
-- **Datos de ejemplo**: coloca PKL normalizados en `data/<dataset_id>/`. La app asumirá `normalized.parquet` en esa carpeta después del pipeline de ingestión.
+- **Datos de ejemplo**: sube un PKL real o coloca un PKL en `data/<dataset_id>/raw.pkl` y re-ejecuta el endpoint de subida para regenerar el pipeline (`normalized.parquet`, `cardinals.json`, `rilsa_map.json`).
 - **Pruebas**: utiliza `tests/test_analysis_services.py` como base para validar nuevas funciones de análisis.
 
 ## Desarrollo

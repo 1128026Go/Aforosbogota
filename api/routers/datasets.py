@@ -8,6 +8,8 @@ from pathlib import Path
 from datetime import datetime
 import uuid
 
+from api.services import normalize_pkl_to_parquet
+
 router = APIRouter(
     prefix="/api/v1/datasets",
     tags=["datasets"],
@@ -51,18 +53,18 @@ async def upload_dataset(file: UploadFile = File(...)) -> Dict[str, Any]:
         with file_path.open("wb") as f:
             f.write(contents)
 
-        # TODO: Normalize PKL to Parquet here
-        # TODO: Extract metadata (frames, tracks, dimensions)
-        
+        parquet_path = dataset_dir / "normalized.parquet"
+        meta = normalize_pkl_to_parquet(file_path, parquet_path)
+
         # Create metadata file
         metadata = {
             "dataset_id": dataset_id,
             "name": file.filename,
-            "frames": 1500,  # TODO: Extract from PKL
-            "tracks": 45,     # TODO: Extract from PKL
-            "width": 1280,     # TODO: Extract from PKL
-            "height": 720,     # TODO: Extract from PKL
-            "fps": 30,
+            "frames": meta.get("frames"),
+            "tracks": meta.get("tracks"),
+            "width": meta.get("width"),
+            "height": meta.get("height"),
+            "fps": meta.get("fps"),
             "created_at": datetime.now().isoformat(),
             "status": "ready",
         }
@@ -77,6 +79,8 @@ async def upload_dataset(file: UploadFile = File(...)) -> Dict[str, Any]:
             "status": "success",
         }
 
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 

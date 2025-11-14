@@ -19,6 +19,7 @@ from api.models.config import (
 )
 from api.models.schemas import AccessGenerationResponse
 from api.services.cardinals import CardinalsService
+from api.services.cardinals_persistence import persist_cardinals_and_rilsa
 from api.services.analysis_settings import (
     load_analysis_settings,
     save_analysis_settings,
@@ -207,6 +208,7 @@ async def generate_accesses(
         config = ConfigPersistenceService.create_default_config(dataset_id)
 
     config.accesses = accesses
+    persist_cardinals_and_rilsa(dataset_id, accesses)
     if not ConfigPersistenceService.save_config(config):
         raise HTTPException(
             status_code=500,
@@ -245,6 +247,7 @@ async def save_accesses(dataset_id: str, update: AccessPolygonUpdate):
             status_code=500,
             detail=f"Failed to save configuration for dataset {dataset_id}"
         )
+    persist_cardinals_and_rilsa(dataset_id, config.accesses)
     
     return config
 
@@ -288,6 +291,7 @@ async def generate_rilsa_rules(dataset_id: str):
             status_code=500,
             detail=f"Failed to save RILSA rules for dataset {dataset_id}"
         )
+    persist_cardinals_and_rilsa(dataset_id, config.accesses)
     
     return config
 

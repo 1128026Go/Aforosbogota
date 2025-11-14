@@ -10,6 +10,7 @@ import {
   VolumeRow,
   ConflictEvent,
   ForbiddenMovement,
+  QcSummary,
 } from "@/types";
 import {
   LineChart,
@@ -31,7 +32,22 @@ type TabId =
   | "conflicts"
   | "violations"
   | "settings"
-  | "downloads";
+  | "downloads"
+  | "diagnostics";
+
+type ResourceState<T> = {
+  loading: boolean;
+  error: string | null;
+  status?: number;
+  data: T | null;
+};
+
+const createInitialState = <T,>(): ResourceState<T> => ({
+  loading: true,
+  error: null,
+  status: undefined,
+  data: null,
+});
 
 type VolumeColumns = Record<keyof VolumeRow, boolean>;
 
@@ -97,10 +113,11 @@ const ResultsPage: React.FC = () => {
   const [analysisSettings, setAnalysisSettings] = useState<AnalysisSettings | null>(null);
   const [settingsDraft, setSettingsDraft] = useState<AnalysisSettings | null>(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
-  const [volumes, setVolumes] = useState<VolumesResponse | null>(null);
-  const [speeds, setSpeeds] = useState<SpeedsResponse | null>(null);
-  const [conflicts, setConflicts] = useState<ConflictsResponse | null>(null);
-  const [violations, setViolations] = useState<ViolationsResponse | null>(null);
+  const [volumesState, setVolumesState] = useState<ResourceState<VolumesResponse>>(createInitialState<VolumesResponse>());
+  const [speedsState, setSpeedsState] = useState<ResourceState<SpeedsResponse>>(createInitialState<SpeedsResponse>());
+  const [conflictsState, setConflictsState] = useState<ResourceState<ConflictsResponse>>(createInitialState<ConflictsResponse>());
+  const [violationsState, setViolationsState] = useState<ResourceState<ViolationsResponse>>(createInitialState<ViolationsResponse>());
+  const [qcState, setQcState] = useState<ResourceState<QcSummary>>(createInitialState<QcSummary>());
   const [forbiddenInput, setForbiddenInput] = useState("");
   const [forbiddenSaving, setForbiddenSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -129,78 +146,142 @@ const ResultsPage: React.FC = () => {
     setConflictFilters(filters);
   }, []);
 
-  const refreshAnalysis = useCallback(async () => {
+  const parseApiError = (err: unknown): { message: string; status?: number } => {
+    if (err && typeof err === "object") {
+      const apiError = err as { detail?: string; message?: string; status?: number };
+      return {
+        message: apiError.detail || apiError.message || "Error inesperado",
+        status: typeof apiError.status === "number" ? apiError.status : undefined,
+      };
+    }
+    if (err instanceof Error) {
+      return { message: err.message, status: undefined };
+    }
+    return { message: "Error inesperado", status: undefined };
+  };
+
+  const fetchVolumes = useCallback(async () => {
     if (!datasetId) return;
+    setVolumesState((prev) => ({ ...prev, loading: true, error: null, status: undefined }));
     try {
-      const [volumesData, speedsData, conflictsData, violationsData] = await Promise.all([
-        api.getVolumes(datasetId),
-        api.getSpeeds(datasetId),
-        api.getConflicts(datasetId),
-        api.getViolations(datasetId),
-      ]);
-      setVolumes(volumesData);
-      setSpeeds(speedsData);
-      setConflicts(conflictsData);
-      setViolations(violationsData);
-      if (conflictsData?.events?.length) {
-        initializeFilters(conflictsData.events);
+      const data = await api.getVolumes(datasetId);
+      setVolumesState({ loading: false, error: null, status: undefined, data });
+    } catch (err) {
+      const { message, status } = parseApiError(err);
+      setVolumesState({ loading: false, error: message, status, data: null });
+    }
+  }, [datasetId]);
+
+  const fetchSpeeds = useCallback(async () => {
+    if (!datasetId) return;
+    setSpeedsState((prev) => ({ ...prev, loading: true, error: null, status: undefined }));
+    try {
+      const data = await api.getSpeeds(datasetId);
+      setSpeedsState({ loading: false, error: null, status: undefined, data });
+    } catch (err) {
+      const { message, status } = parseApiError(err);
+      setSpeedsState({ loading: false, error: message, status, data: null });
+    }
+  }, [datasetId]);
+
+  const fetchConflicts = useCallback(async () => {
+    if (!datasetId) return;
+    setConflictsState((prev) => ({ ...prev, loading: true, error: null, status: undefined }));
+    try {
+      const data = await api.getConflicts(datasetId);
+      setConflictsState({ loading: false, error: null, status: undefined, data });
+      if (data?.events?.length) {
+        initializeFilters(data.events);
+      } else {
+        setConflictFilters({});
       }
     } catch (err) {
-      console.error(err);
-      setError((err as Error).message);
+      const { message, status } = parseApiError(err);
+      setConflictsState({ loading: false, error: message, status, data: null });
+      setConflictFilters({});
     }
   }, [datasetId, initializeFilters]);
+
+  const fetchViolations = useCallback(async () => {
+    if (!datasetId) return;
+    setViolationsState((prev) => ({ ...prev, loading: true, error: null, status: undefined }));
+    try {
+      const data = await api.getViolations(datasetId);
+      setViolationsState({ loading: false, error: null, status: undefined, data });
+    } catch (err) {
+      const { message, status } = parseApiError(err);
+      setViolationsState({ loading: false, error: message, status, data: null });
+    }
+  }, [datasetId]);
+
+  const fetchQcSummary = useCallback(async () => {
+    if (!datasetId) return;
+    setQcState((prev) => ({ ...prev, loading: true, error: null, status: undefined }));
+    try {
+      const data = await api.getQcSummary(datasetId);
+      setQcState({ loading: false, error: null, status: undefined, data });
+    } catch (err) {
+      const { message, status } = parseApiError(err);
+      setQcState({ loading: false, error: message, status, data: null });
+    }
+  }, [datasetId]);
+
+  const refreshAnalysis = useCallback(async () => {
+    if (!datasetId) return;
+    await Promise.all([
+      fetchVolumes(),
+      fetchSpeeds(),
+      fetchConflicts(),
+      fetchViolations(),
+      fetchQcSummary(),
+    ]);
+  }, [datasetId, fetchVolumes, fetchSpeeds, fetchConflicts, fetchViolations, fetchQcSummary]);
 
   const loadAll = useCallback(async () => {
     if (!datasetId) return;
     setLoading(true);
     setError(null);
     try {
-      const [settingsData, forbiddenData, volumesData, speedsData, conflictsData, violationsData] = await Promise.all([
+      const [settingsData, forbiddenData] = await Promise.all([
         api.getAnalysisSettings(datasetId),
         api.getForbiddenMovements(datasetId),
-        api.getVolumes(datasetId),
-        api.getSpeeds(datasetId),
-        api.getConflicts(datasetId),
-        api.getViolations(datasetId),
       ]);
       setAnalysisSettings(settingsData);
       setSettingsDraft(settingsData);
       setTtcFilter(settingsData.ttc_threshold_s);
       setForbiddenInput(stringifyForbidden(forbiddenData));
-      setVolumes(volumesData);
-      setSpeeds(speedsData);
-      setConflicts(conflictsData);
-      setViolations(violationsData);
-      if (conflictsData?.events?.length) {
-        initializeFilters(conflictsData.events);
-      }
     } catch (err) {
-      console.error(err);
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
+      const { message } = parseApiError(err);
+      setError(message);
     }
-  }, [datasetId, initializeFilters]);
+    await Promise.all([
+      fetchVolumes(),
+      fetchSpeeds(),
+      fetchConflicts(),
+      fetchViolations(),
+      fetchQcSummary(),
+    ]);
+    setLoading(false);
+  }, [datasetId, fetchVolumes, fetchSpeeds, fetchConflicts, fetchViolations, fetchQcSummary]);
 
   useEffect(() => {
     loadAll();
   }, [loadAll]);
 
   const filteredConflictEvents = useMemo(() => {
-    if (!conflicts) return [];
-    return conflicts.events.filter(
+    if (!conflictsState.data) return [];
+    return conflictsState.data.events.filter(
       (event) => conflictFilters[event.pair_type] && event.ttc_min <= ttcFilter
     );
-  }, [conflicts, conflictFilters, ttcFilter]);
+  }, [conflictsState.data, conflictFilters, ttcFilter]);
 
   const maxSpeedValue = useMemo(() => {
-    if (!speeds) return 1;
-    return speeds.per_movement.reduce(
+    if (!speedsState.data) return 1;
+    return speedsState.data.per_movement.reduce(
       (max, record) => Math.max(max, record.stats.p85_kmh, record.stats.max_kmh),
       1
     );
-  }, [speeds]);
+  }, [speedsState.data]);
 
   const handleDownload = async (type: "csv" | "excel" | "pdf") => {
     if (!datasetId) return;
@@ -296,6 +377,115 @@ const ResultsPage: React.FC = () => {
     }
   };
 
+  const missingConfigMessage = "Aún no se han generado cardinales/RILSA para este dataset. Ve al paso de configuración y pulsa ‘Generar accesos’.";
+  const emptyDataMessage = "No se detectaron trayectorias válidas con las reglas actuales (posible PKL con pocos objetos o muy corto).";
+
+  const renderLoadingMessage = (text: string) => (
+    <div className="text-center text-slate-500">{text}</div>
+  );
+
+  const renderErrorMessage = (text: string) => (
+    <div className="text-center text-red-600">{text}</div>
+  );
+
+  const renderInfoMessage = (text: string) => (
+    <div className="text-center text-slate-500">{text}</div>
+  );
+
+  const isMissingConfig = (state: ResourceState<unknown>) =>
+    state.status === 404 && state.error !== null && state.error.toLowerCase().includes("dataset sin datos normalizados");
+
+  const renderVolumesTab = () => {
+    if (volumesState.loading) return renderLoadingMessage("Cargando volúmenes…");
+    if (volumesState.error) {
+      if (isMissingConfig(volumesState)) {
+        return renderInfoMessage(missingConfigMessage);
+      }
+      return renderErrorMessage(`Error al cargar volúmenes: ${volumesState.error}`);
+    }
+    if (!volumesState.data || volumesState.data.totals_by_interval.length === 0) {
+      return renderInfoMessage(emptyDataMessage);
+    }
+    return (
+      <VolumeDashboard
+        data={volumesState.data}
+        visibleColumns={visibleColumns}
+        onToggleColumn={toggleColumn}
+      />
+    );
+  };
+
+  const renderSpeedsTab = () => {
+    if (speedsState.loading) return renderLoadingMessage("Cargando velocidades…");
+    if (speedsState.error) {
+      if (isMissingConfig(speedsState)) {
+        return renderInfoMessage(missingConfigMessage);
+      }
+      return renderErrorMessage(`Error al cargar velocidades: ${speedsState.error}`);
+    }
+    if (!speedsState.data || speedsState.data.per_movement.length === 0) {
+      return renderInfoMessage(emptyDataMessage);
+    }
+    return <SpeedDashboard data={speedsState.data} maxValue={maxSpeedValue} />;
+  };
+
+  const renderConflictsTab = () => {
+    if (conflictsState.loading) return renderLoadingMessage("Cargando conflictos…");
+    if (conflictsState.error) {
+      if (isMissingConfig(conflictsState)) {
+        return renderInfoMessage(missingConfigMessage);
+      }
+      return renderErrorMessage(`Error al cargar conflictos: ${conflictsState.error}`);
+    }
+    if (!conflictsState.data) {
+      return renderInfoMessage(emptyDataMessage);
+    }
+    return (
+      <ConflictDashboard
+        data={conflictsState.data}
+        filters={conflictFilters}
+        onToggleFilter={toggleConflictFilter}
+        filteredEvents={filteredConflictEvents}
+        severityThreshold={ttcFilter}
+        onSeverityChange={setTtcFilter}
+        onRefresh={refreshAnalysis}
+      />
+    );
+  };
+
+  const renderViolationsTab = () => {
+    if (violationsState.loading) return renderLoadingMessage("Cargando maniobras indebidas…");
+    if (violationsState.error) {
+      if (isMissingConfig(violationsState)) {
+        return renderInfoMessage(missingConfigMessage);
+      }
+      return renderErrorMessage(`Error al cargar maniobras indebidas: ${violationsState.error}`);
+    }
+    return (
+      <ViolationsPanel
+        data={violationsState.data}
+        forbiddenInput={forbiddenInput}
+        onForbiddenChange={handleForbiddenChange}
+        onSaveForbidden={handleSaveForbidden}
+        saving={forbiddenSaving}
+      />
+    );
+  };
+
+  const renderDiagnosticsTab = () => {
+    if (qcState.loading) return renderLoadingMessage("Cargando resumen de control de calidad…");
+    if (qcState.error) {
+      if (isMissingConfig(qcState)) {
+        return renderInfoMessage(missingConfigMessage);
+      }
+      return renderErrorMessage(`Error al cargar el resumen QC: ${qcState.error}`);
+    }
+    if (!qcState.data) {
+      return renderInfoMessage(emptyDataMessage);
+    }
+    return <QcSummaryPanel data={qcState.data} />;
+  };
+
   if (!datasetId) {
     return <div className="p-12 text-center text-red-600">Dataset no encontrado.</div>;
   }
@@ -316,6 +506,7 @@ const ResultsPage: React.FC = () => {
             { id: "speeds", label: "Velocidades" },
             { id: "conflicts", label: "Conflictos" },
             { id: "violations", label: "Maniobras indebidas" },
+            { id: "diagnostics", label: "Diagnóstico" },
             { id: "settings", label: "Configuración avanzada" },
             { id: "downloads", label: "Descargas" },
           ].map((tab) => (
@@ -339,31 +530,15 @@ const ResultsPage: React.FC = () => {
           ) : error ? (
             <div className="text-center text-red-600">Error: {error}</div>
           ) : activeTab === "volumes" ? (
-            <VolumeDashboard
-              data={volumes}
-              visibleColumns={visibleColumns}
-              onToggleColumn={toggleColumn}
-            />
+            renderVolumesTab()
           ) : activeTab === "speeds" ? (
-            <SpeedDashboard data={speeds} maxValue={maxSpeedValue} />
+            renderSpeedsTab()
           ) : activeTab === "conflicts" ? (
-            <ConflictDashboard
-              data={conflicts}
-              filters={conflictFilters}
-              onToggleFilter={toggleConflictFilter}
-              filteredEvents={filteredConflictEvents}
-              severityThreshold={ttcFilter}
-              onSeverityChange={setTtcFilter}
-              onRefresh={refreshAnalysis}
-            />
+            renderConflictsTab()
           ) : activeTab === "violations" ? (
-            <ViolationsPanel
-              data={violations}
-              forbiddenInput={forbiddenInput}
-              onForbiddenChange={handleForbiddenChange}
-              onSaveForbidden={handleSaveForbidden}
-              saving={forbiddenSaving}
-            />
+            renderViolationsTab()
+          ) : activeTab === "diagnostics" ? (
+            renderDiagnosticsTab()
           ) : activeTab === "settings" ? (
             <SettingsPanel
               settings={analysisSettings}
@@ -378,9 +553,9 @@ const ResultsPage: React.FC = () => {
               state={downloadState}
               message={downloadMessage}
               onGenerate={handleDownload}
-              totalVehicles={volumes?.totals_by_interval.reduce((sum, row) => sum + row.total, 0) ?? 0}
-              totalViolations={violations?.total_violations ?? 0}
-              totalConflicts={conflicts?.total_conflicts ?? 0}
+              totalVehicles={volumesState.data?.totals_by_interval.reduce((sum, row) => sum + row.total, 0) ?? 0}
+              totalViolations={violationsState.data?.total_violations ?? 0}
+              totalConflicts={conflictsState.data?.total_conflicts ?? 0}
             />
           )}
         </section>
@@ -1092,3 +1267,78 @@ const DownloadCard: React.FC<DownloadCardProps> = ({ title, description, emoji, 
 );
 
 export default ResultsPage;
+
+interface QcSummaryPanelProps {
+  data: QcSummary;
+}
+
+const CLASS_ORDER = ["auto", "bus", "camion", "moto", "bici", "peaton", "ignore"];
+
+const QcSummaryPanel: React.FC<QcSummaryPanelProps> = ({ data }) => {
+  const classEntries = CLASS_ORDER.map((cls) => [cls, data.counts_by_class?.[cls] ?? 0]);
+  const movementEntries = Object.entries(data.counts_by_movement || {}).sort((a, b) =>
+    a[0].localeCompare(b[0], undefined, { numeric: true })
+  );
+
+  return (
+    <div className="space-y-6">
+      <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-900">Resumen de control de calidad</h2>
+          <p className="text-sm text-slate-500">
+            Compara los tracks detectados en el parquet contra los considerados en los cálculos por clase y movimiento.
+          </p>
+        </div>
+      </header>
+
+      <div className="grid md:grid-cols-3 gap-4">
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-600">
+          <p className="font-semibold text-slate-800">Tracks brutos</p>
+          <p className="text-2xl font-bold text-slate-900">{data.total_tracks_raw}</p>
+        </div>
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-600">
+          <p className="font-semibold text-slate-800">Tracks contados (sin ignore)</p>
+          <p className="text-2xl font-bold text-slate-900">{data.counted_tracks}</p>
+        </div>
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-600">
+          <p className="font-semibold text-slate-800">Tracks ignorados</p>
+          <p className="text-2xl font-bold text-slate-900">{data.counts_by_class?.ignore ?? 0}</p>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="border border-slate-200 rounded-xl overflow-hidden">
+          <div className="bg-slate-100 px-4 py-3 font-semibold text-slate-800">Conteo por clase</div>
+          <table className="w-full text-sm">
+            <tbody>
+              {classEntries.map(([cls, count]) => (
+                <tr key={cls} className="border-t border-slate-200">
+                  <td className="px-4 py-2 font-semibold text-slate-700 uppercase">{cls}</td>
+                  <td className="px-4 py-2 text-right font-mono text-slate-800">{count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="border border-slate-200 rounded-xl overflow-hidden">
+          <div className="bg-slate-100 px-4 py-3 font-semibold text-slate-800">Conteo por movimiento RILSA</div>
+          {movementEntries.length ? (
+            <table className="w-full text-sm">
+              <tbody>
+                {movementEntries.map(([code, count]) => (
+                  <tr key={code} className="border-t border-slate-200">
+                    <td className="px-4 py-2 font-mono text-blue-700">{code}</td>
+                    <td className="px-4 py-2 text-right font-mono text-slate-800">{count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="px-4 py-3 text-sm text-slate-500">Sin movimientos contabilizados</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};

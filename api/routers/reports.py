@@ -16,12 +16,14 @@ from api.models.config import ForbiddenMovement
 from api.routers.datasets import _dataset_dir
 from api.services import (
     ConfigPersistenceService,
+    MissingTrajectoryDataError,
     assign_tracks_to_movements,
     build_volume_tables,
     calculate_counts_by_interval,
     classify_vehicle,
     compute_track_speeds,
     detect_conflicts,
+    ensure_tracks_available,
     export_pdf,
     export_volumes_to_excel,
     load_analysis_settings,
@@ -67,20 +69,27 @@ def _load_analysis_inputs(dataset_id: str) -> Tuple[Path, List[Dict], Dict]:
     return normalized, accesses, rilsa_map
 
 
+def _raise_tracking_http_error(exc: MissingTrajectoryDataError) -> None:
+    raise HTTPException(status_code=400, detail=str(exc))
+
+
 @router.get("/{dataset_id}/summary")
 def generate_csv_report(dataset_id: str, interval_minutes: int | None = None) -> Dict[str, str]:
     settings = load_analysis_settings(dataset_id)
     interval = interval_minutes or settings.interval_minutes
     normalized_path, accesses, rilsa_map = _load_analysis_inputs(dataset_id)
-    counts_df = calculate_counts_by_interval(
-        normalized_path,
-        accesses,
-        rilsa_map,
-        interval_minutes=interval,
-        min_length_m=settings.min_length_m,
-        max_direction_changes=settings.max_direction_changes,
-        min_net_over_path_ratio=settings.min_net_over_path_ratio,
-    )
+    try:
+        counts_df = calculate_counts_by_interval(
+            normalized_path,
+            accesses,
+            rilsa_map,
+            interval_minutes=interval,
+            min_length_m=settings.min_length_m,
+            max_direction_changes=settings.max_direction_changes,
+            min_net_over_path_ratio=settings.min_net_over_path_ratio,
+        )
+    except MissingTrajectoryDataError as exc:
+        _raise_tracking_http_error(exc)
 
     reports_dir = _reports_dir(dataset_id)
     timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
@@ -94,15 +103,18 @@ def generate_excel_report(dataset_id: str, interval_minutes: int | None = None) 
     settings = load_analysis_settings(dataset_id)
     interval = interval_minutes or settings.interval_minutes
     normalized_path, accesses, rilsa_map = _load_analysis_inputs(dataset_id)
-    counts_df = calculate_counts_by_interval(
-        normalized_path,
-        accesses,
-        rilsa_map,
-        interval_minutes=interval,
-        min_length_m=settings.min_length_m,
-        max_direction_changes=settings.max_direction_changes,
-        min_net_over_path_ratio=settings.min_net_over_path_ratio,
-    )
+    try:
+        counts_df = calculate_counts_by_interval(
+            normalized_path,
+            accesses,
+            rilsa_map,
+            interval_minutes=interval,
+            min_length_m=settings.min_length_m,
+            max_direction_changes=settings.max_direction_changes,
+            min_net_over_path_ratio=settings.min_net_over_path_ratio,
+        )
+    except MissingTrajectoryDataError as exc:
+        _raise_tracking_http_error(exc)
     tables = build_volume_tables(counts_df)
 
     reports_dir = _reports_dir(dataset_id)
@@ -127,32 +139,43 @@ def generate_pdf_report(
     settings = load_analysis_settings(dataset_id)
     interval = interval_minutes or settings.interval_minutes
     normalized_path, accesses, rilsa_map = _load_analysis_inputs(dataset_id)
-    counts_df = calculate_counts_by_interval(
-        normalized_path,
-        accesses,
-        rilsa_map,
-        interval_minutes=interval,
-        min_length_m=settings.min_length_m,
-        max_direction_changes=settings.max_direction_changes,
-        min_net_over_path_ratio=settings.min_net_over_path_ratio,
-    )
+    try:
+        counts_df = calculate_counts_by_interval(
+            normalized_path,
+            accesses,
+            rilsa_map,
+            interval_minutes=interval,
+            min_length_m=settings.min_length_m,
+            max_direction_changes=settings.max_direction_changes,
+            min_net_over_path_ratio=settings.min_net_over_path_ratio,
+        )
+    except MissingTrajectoryDataError as exc:
+        _raise_tracking_http_error(exc)
     tables = build_volume_tables(counts_df)
 
     df = pd.read_parquet(normalized_path)
-    filtered, meta_df = assign_tracks_to_movements(
-        df,
-        accesses,
-        rilsa_map,
-        fps=fps,
-        min_length_m=settings.min_length_m,
-        max_direction_changes=settings.max_direction_changes,
-        min_net_over_path_ratio=settings.min_net_over_path_ratio,
-    )
+    try:
+        filtered, meta_df = assign_tracks_to_movements(
+            df,
+            accesses,
+            rilsa_map,
+            fps=fps,
+            min_length_m=settings.min_length_m,
+            max_direction_changes=settings.max_direction_changes,
+            min_net_over_path_ratio=settings.min_net_over_path_ratio,
+        )
+    except MissingTrajectoryDataError as exc:
+        _raise_tracking_http_error(exc)
     meta_df = meta_df[["track_id", "rilsa_code", "vehicle_class"]]
     speeds_df = compute_track_speeds(filtered, fps=fps, pixel_to_meter=pixel_to_meter)
     speed_summary = summarize_speeds(speeds_df, meta_df)
 
     df_conflicts = df.copy()
+    try:
+        ensure_tracks_available(df_conflicts)
+    except MissingTrajectoryDataError as exc:
+        _raise_tracking_http_error(exc)
+
     meta_lookup = meta_df.set_index("track_id")["vehicle_class"]
     df_conflicts["vehicle_class"] = df_conflicts["track_id"].map(meta_lookup).fillna(
         df_conflicts["object_class"].map(lambda value: classify_vehicle(str(value)))

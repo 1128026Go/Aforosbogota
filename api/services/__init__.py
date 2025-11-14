@@ -16,11 +16,15 @@ from .rilsa_mapping import (
 )
 from .speeds import compute_track_speeds, summarize_speeds
 from .trajectory_processor import (
+    MissingTrajectoryDataError,
     assign_tracks_to_movements,
     calculate_counts_by_interval,
     classify_vehicle,
+    ensure_tracks_available,
 )
 from .violations import summarize_violations
+from .convert import normalize_pkl_to_parquet
+from .cardinals_persistence import persist_cardinals_and_rilsa
 
 __all__ = [
     "load_analysis_settings",
@@ -42,6 +46,10 @@ __all__ = [
     "movement_code_for_pedestrian",
     "order_accesses_for_rilsa",
     "assign_tracks_to_movements",
+    "MissingTrajectoryDataError",
+    "ensure_tracks_available",
     "classify_vehicle",
     "summarize_violations",
+    "normalize_pkl_to_parquet",
+    "persist_cardinals_and_rilsa",
 ]

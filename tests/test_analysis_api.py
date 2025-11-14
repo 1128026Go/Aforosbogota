@@ -3,6 +3,7 @@ Pruebas de integración ligera para los endpoints de análisis y configuración.
 """
 from __future__ import annotations
 
+import io
 import json
 from pathlib import Path
 from typing import Tuple
@@ -126,6 +127,105 @@ def test_forbidden_movements_roundtrip(api_client):
     assert {item["rilsa_code"] for item in confirm.json()} == {"5", "9_"}
 
 
+def test_reports_generation(api_client):
+    client, dataset_id = api_client
+
+    excel_resp = client.get(f"/api/v1/reports/{dataset_id}/excel")
+    assert excel_resp.status_code == 200
+    file_name = excel_resp.json()["file_name"]
+    path = Path(datasets_router.DATA_DIR) / dataset_id / "reports" / file_name
+    assert path.exists()
+
+    try:
+        import weasyprint  # noqa: F401
+    except Exception:
+        pytest.skip("WeasyPrint no disponible en el entorno de pruebas")
+
+    pdf_resp = client.get(f"/api/v1/reports/{dataset_id}/pdf")
+    assert pdf_resp.status_code == 200
+    pdf_name = pdf_resp.json()["file_name"]
+    pdf_path = Path(datasets_router.DATA_DIR) / dataset_id / "reports" / pdf_name
+    assert pdf_path.exists()
+
+
+def test_generate_accesses_from_normalized(api_client):
+    client, dataset_id = api_client
+
+    response = client.post(f"/api/v1/config/{dataset_id}/generate_accesses")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["dataset_id"] == dataset_id
+    assert isinstance(payload["accesses"], list)
+    assert {access["cardinal"] for access in payload["accesses"]}
+    dataset_dir = Path(datasets_router.DATA_DIR) / dataset_id
+    cardinals_path = dataset_dir / "cardinals.json"
+    rilsa_path = dataset_dir / "rilsa_map.json"
+    assert cardinals_path.exists()
+    assert rilsa_path.exists()
+    cardinals = json.loads(cardinals_path.read_text(encoding="utf-8"))
+    rilsa_map = json.loads(rilsa_path.read_text(encoding="utf-8"))
+    assert len(cardinals) == len(payload["accesses"])
+    assert rilsa_map["metadata"]["num_accesses"] == len(payload["accesses"])
+
+
+def test_upload_dataset_creates_normalized(tmp_path, monkeypatch):
+    data_dir = tmp_path / "data"
+    config_dir = tmp_path / "configs"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(datasets_router, "DATA_DIR", data_dir)
+    monkeypatch.setattr(analysis_settings_service, "DATA_DIR", data_dir)
+    monkeypatch.setattr(ConfigPersistenceService, "DEFAULT_CONFIG_DIR", str(config_dir))
+
+    client = TestClient(app)
+
+    df = pd.DataFrame(
+        {
+            "frame_id": [0, 1, 0, 1],
+            "track_id": [1, 1, 2, 2],
+            "x": [10.0, 11.0, 50.0, 51.0],
+            "y": [5.0, 6.0, 25.0, 26.0],
+            "object_class": ["car", "car", "person", "person"],
+        }
+    )
+    buffer = io.BytesIO()
+    df.to_pickle(buffer)
+    buffer.seek(0)
+
+    response = client.post(
+        "/api/v1/datasets/upload",
+        files={"file": ("test.pkl", buffer, "application/octet-stream")},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    dataset_id = payload["dataset_id"]
+    dataset_dir = data_dir / dataset_id
+
+    assert (dataset_dir / "raw.pkl").exists()
+    assert (dataset_dir / "normalized.parquet").exists()
+    metadata = json.loads((dataset_dir / "metadata.json").read_text(encoding="utf-8"))
+    assert metadata["tracks"] == 2
+    assert metadata["frames"] >= 2
+
+
+def test_qc_summary_endpoint(api_client):
+    client, dataset_id = api_client
+
+    # Asegurar accesos y mapa RILSA generados
+    client.post(f"/api/v1/config/{dataset_id}/generate_accesses")
+
+    response = client.get(f"/api/v1/analysis/{dataset_id}/qc_summary")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["dataset_id"] == dataset_id
+    assert "total_tracks_raw" in payload
+    assert "counts_by_class" in payload
+    assert "counts_by_movement" in payload
+    assert payload["total_tracks_raw"] >= payload["counted_tracks"]
+    assert isinstance(payload["counts_by_class"], dict)
+    assert isinstance(payload["counts_by_movement"], dict)
+
+
 def test_analysis_endpoints(api_client):
     client, dataset_id = api_client
 
@@ -160,34 +260,48 @@ def test_analysis_endpoints(api_client):
     assert data["total_violations"] >= 1
 
 
-def test_reports_generation(api_client):
-    client, dataset_id = api_client
+def test_volumes_endpoint_requires_tracking(tmp_path, monkeypatch) -> None:
+    data_dir = tmp_path / "data"
+    config_dir = tmp_path / "configs"
+    data_dir.mkdir(parents=True, exist_ok=True)
 
-    excel_resp = client.get(f"/api/v1/reports/{dataset_id}/excel")
-    assert excel_resp.status_code == 200
-    file_name = excel_resp.json()["file_name"]
-    path = Path(datasets_router.DATA_DIR) / dataset_id / "reports" / file_name
-    assert path.exists()
+    monkeypatch.setattr(datasets_router, "DATA_DIR", data_dir)
+    monkeypatch.setattr(analysis_settings_service, "DATA_DIR", data_dir)
+    monkeypatch.setattr(ConfigPersistenceService, "DEFAULT_CONFIG_DIR", str(config_dir))
 
-    try:
-        import weasyprint  # noqa: F401
-    except Exception:
-        pytest.skip("WeasyPrint no disponible en el entorno de pruebas")
+    dataset_id = "detections_only"
+    dataset_dir = data_dir / dataset_id
+    dataset_dir.mkdir(parents=True, exist_ok=True)
 
-    pdf_resp = client.get(f"/api/v1/reports/{dataset_id}/pdf")
-    assert pdf_resp.status_code == 200
-    pdf_name = pdf_resp.json()["file_name"]
-    pdf_path = Path(datasets_router.DATA_DIR) / dataset_id / "reports" / pdf_name
-    assert pdf_path.exists()
+    detection_df = pd.DataFrame(
+        {
+            "frame_id": [0, 1],
+            "track_id": pd.Series([pd.NA, pd.NA], dtype="Int64"),
+            "x": [10.0, 20.0],
+            "y": [30.0, 40.0],
+            "object_class": ["car", "car"],
+        }
+    )
+    detection_df.to_parquet(dataset_dir / "normalized.parquet")
+    (dataset_dir / "metadata.json").write_text(json.dumps({"fps": 30}), encoding="utf-8")
 
+    accesses = [
+        {"id": "A_N", "cardinal": "N", "x": 0.0, "y": 0.0, "count": 0},
+        {"id": "A_S", "cardinal": "S", "x": 0.0, "y": 100.0, "count": 0},
+    ]
+    (dataset_dir / "cardinals.json").write_text(json.dumps(accesses), encoding="utf-8")
+    rilsa_map = build_rilsa_rule_map(accesses)
+    (dataset_dir / "rilsa_map.json").write_text(json.dumps(rilsa_map), encoding="utf-8")
 
-def test_generate_accesses_from_normalized(api_client):
-    client, dataset_id = api_client
+    config = DatasetConfig(
+        dataset_id=dataset_id,
+        accesses=[],
+        rilsa_rules=[],
+        forbidden_movements=[],
+    )
+    ConfigPersistenceService.save_config(config)
 
-    response = client.post(f"/api/v1/config/{dataset_id}/generate_accesses")
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["dataset_id"] == dataset_id
-    assert isinstance(payload["accesses"], list)
-    assert {access["cardinal"] for access in payload["accesses"]}
-
+    client = TestClient(app)
+    response = client.get(f"/api/v1/analysis/{dataset_id}/volumes")
+    assert response.status_code == 400
+    assert "solo detecciones" in response.json()["detail"]

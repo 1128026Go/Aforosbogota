@@ -12,23 +12,45 @@ import pandas as pd
 
 from api.services import filters, rilsa_mapping
 
+TRACKING_REQUIRED_MESSAGE = (
+    "Este archivo PKL contiene solo detecciones cuadro a cuadro (sin trayectorias / track_id). "
+    "Para generar aforos por movimientos se requiere un PKL con tracking (trayectorias no vacías)."
+)
+
+
+class MissingTrajectoryDataError(ValueError):
+    """Error específico para cuando no hay datos de tracking utilizables."""
+
 
 VEHICLE_CLASS_MAP = {
     "bus": "bus",
     "coach": "bus",
+    "microbus": "bus",
     "truck": "camion",
     "camion": "camion",
     "lorry": "camion",
+    "trailer": "camion",
+    "pickup": "camion",
     "bicycle": "bici",
     "bike": "bici",
     "bici": "bici",
     "cyclist": "bici",
+    "cycle": "bici",
     "motorcycle": "moto",
     "motorbike": "moto",
+    "scooter": "moto",
     "moto": "moto",
+    "car": "auto",
+    "auto": "auto",
+    "vehiculo": "auto",
+    "vehicle": "auto",
+    "suv": "auto",
+    "sedan": "auto",
+    "van": "auto",
     "person": "peaton",
     "pedestrian": "peaton",
     "peaton": "peaton",
+    "people": "peaton",
 }
 
 
@@ -52,7 +74,7 @@ def _classify_vehicle(label: str) -> str:
     for key, value in VEHICLE_CLASS_MAP.items():
         if key in normalized:
             return value
-    return "auto"
+    return "ignore"
 
 
 def classify_vehicle(label: str) -> str:
@@ -83,6 +105,7 @@ def assign_tracks_to_movements(
       - DataFrame filtrado.
       - DataFrame con columnas [track_id, rilsa_code, vehicle_class, interval_start, interval_end].
     """
+    _ensure_tracks_available(df)
     filtered = filters.filter_tracks(
         df,
         min_length_m=min_length_m,
@@ -92,6 +115,7 @@ def assign_tracks_to_movements(
     veh_lookup, ped_lookup = _build_rilsa_lookups(accesses, rilsa_map)
 
     records = []
+    valid_track_ids = set()
     for track_id, group in filtered.groupby("track_id"):
         ordered = group.sort_values("frame_id")
         start = ordered.iloc[0]
@@ -99,12 +123,13 @@ def assign_tracks_to_movements(
         origin_id = _nearest_access(float(start["x"]), float(start["y"]), accesses)
         dest_id = _nearest_access(float(end["x"]), float(end["y"]), accesses)
         vehicle_class = _classify_vehicle(str(start.get("object_class", "")))
+        if vehicle_class == "ignore":
+            continue
         key = (origin_id, dest_id)
         if vehicle_class == "peaton":
             rilsa_code = ped_lookup.get(key, f"P{origin_id}")
         else:
             rilsa_code = veh_lookup.get(key, f"99_{origin_id}_{dest_id}")
-        start_time_min = (float(start["frame_id"]) / fps) / 60.0
         records.append(
             {
                 "track_id": track_id,
@@ -113,7 +138,12 @@ def assign_tracks_to_movements(
                 "frame_start": int(start["frame_id"]),
             }
         )
+        valid_track_ids.add(track_id)
     meta_df = pd.DataFrame(records)
+    if valid_track_ids:
+        filtered = filtered[filtered["track_id"].isin(valid_track_ids)]
+    else:
+        filtered = filtered.iloc[0:0]
     return filtered, meta_df
 
 
@@ -134,6 +164,7 @@ def calculate_counts_by_interval(
     df = pd.read_parquet(parquet_path)
     if df.empty:
         return pd.DataFrame(columns=["interval_start", "interval_end", "rilsa_code", "vehicle_class", "count"])
+    _ensure_tracks_available(df)
 
     filtered, meta_df = assign_tracks_to_movements(
         df,
@@ -164,4 +195,19 @@ def calculate_counts_by_interval(
             }
         )
     return pd.DataFrame(rows)
+
+
+def ensure_tracks_available(df: pd.DataFrame) -> None:
+    """
+    Valida que existan columnas de tracking antes de ejecutar análisis.
+    """
+    _ensure_tracks_available(df)
+
+
+def _ensure_tracks_available(df: pd.DataFrame) -> None:
+    if "track_id" not in df.columns:
+        raise MissingTrajectoryDataError(TRACKING_REQUIRED_MESSAGE)
+    track_series = df["track_id"].dropna()
+    if track_series.empty:
+        raise MissingTrajectoryDataError(TRACKING_REQUIRED_MESSAGE)
 

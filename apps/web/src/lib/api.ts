@@ -14,9 +14,28 @@ import {
   ForbiddenMovement,
   ViolationsResponse,
   AccessGenerationResponse,
+  QcSummary,
 } from "@/types";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3004";
+
+type ApiError = Error & { status?: number; detail?: string };
+
+async function handleApiError(response: Response, fallback: string): Promise<never> {
+  let detail: string | undefined;
+  try {
+    const body = await response.json();
+    if (body && typeof body.detail === "string") {
+      detail = body.detail;
+    }
+  } catch (err) {
+    // Ignorar errores de parseo; usaremos fallback.
+  }
+  const error = new Error(detail || fallback || response.statusText) as ApiError;
+  error.status = response.status;
+  error.detail = detail;
+  throw error;
+}
 
 const api = {
   // ========== DATASETS (Step 1: Upload) ==========
@@ -29,7 +48,7 @@ const api = {
       body: formData,
     });
     if (!response.ok) {
-      throw new Error(`Upload failed: ${response.statusText}`);
+      await handleApiError(response, "Upload failed");
     }
     return response.json();
   },
@@ -37,7 +56,7 @@ const api = {
   async listDatasets(): Promise<DatasetMetadata[]> {
     const response = await fetch(`${API_BASE_URL}/api/v1/datasets/list`);
     if (!response.ok) {
-      throw new Error(`Failed to list datasets: ${response.statusText}`);
+      await handleApiError(response, "Failed to list datasets");
     }
     const data = await response.json();
     return data.datasets || [];
@@ -46,7 +65,7 @@ const api = {
   async getDataset(datasetId: string): Promise<DatasetMetadata> {
     const response = await fetch(`${API_BASE_URL}/api/v1/datasets/${datasetId}`);
     if (!response.ok) {
-      throw new Error(`Failed to get dataset: ${response.statusText}`);
+      await handleApiError(response, "Failed to get dataset");
     }
     const data = await response.json();
     return data.metadata;
@@ -94,9 +113,7 @@ const api = {
       }
     );
     if (!response.ok) {
-      const detail = await response.json().catch(() => null);
-      const message = detail?.detail || response.statusText;
-      throw new Error(`Failed to generate accesses: ${message}`);
+      await handleApiError(response, "Failed to generate accesses");
     }
     return response.json();
   },
@@ -114,7 +131,7 @@ const api = {
       }
     );
     if (!response.ok) {
-      throw new Error(`Failed to save accesses: ${response.statusText}`);
+      await handleApiError(response, "Failed to save accesses");
     }
     return response.json();
   },
@@ -128,7 +145,7 @@ const api = {
       }
     );
     if (!response.ok) {
-      throw new Error(`Failed to generate RILSA rules: ${response.statusText}`);
+      await handleApiError(response, "Failed to generate RILSA rules");
     }
     return response.json();
   },
@@ -136,7 +153,7 @@ const api = {
   async getAnalysisSettings(datasetId: string): Promise<AnalysisSettings> {
     const response = await fetch(`${API_BASE_URL}/api/v1/config/${datasetId}/analysis_settings`);
     if (!response.ok) {
-      throw new Error(`Failed to load analysis settings: ${response.statusText}`);
+      await handleApiError(response, "Failed to load analysis settings");
     }
     return response.json();
   },
@@ -148,7 +165,7 @@ const api = {
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
-      throw new Error(`Failed to update analysis settings: ${response.statusText}`);
+      await handleApiError(response, "Failed to update analysis settings");
     }
     return response.json();
   },
@@ -156,7 +173,7 @@ const api = {
   async getForbiddenMovements(datasetId: string): Promise<ForbiddenMovement[]> {
     const response = await fetch(`${API_BASE_URL}/api/v1/config/${datasetId}/forbidden_movements`);
     if (!response.ok) {
-      throw new Error(`Failed to load forbidden movements: ${response.statusText}`);
+      await handleApiError(response, "Failed to load forbidden movements");
     }
     return response.json();
   },
@@ -171,7 +188,7 @@ const api = {
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
-      throw new Error(`Failed to update forbidden movements: ${response.statusText}`);
+      await handleApiError(response, "Failed to update forbidden movements");
     }
     return response.json();
   },
@@ -180,7 +197,7 @@ const api = {
   async getVolumes(datasetId: string): Promise<VolumesResponse> {
     const response = await fetch(`${API_BASE_URL}/api/v1/analysis/${datasetId}/volumes`);
     if (!response.ok) {
-      throw new Error(`Failed to load volumes: ${response.statusText}`);
+      await handleApiError(response, "Failed to load volumes");
     }
     return response.json();
   },
@@ -198,7 +215,7 @@ const api = {
       : `${API_BASE_URL}/api/v1/analysis/${datasetId}/speeds`;
     const response = await fetch(url);
     if (!response.ok) {
-      throw new Error(`Failed to load speeds: ${response.statusText}`);
+      await handleApiError(response, "Failed to load speeds");
     }
     return response.json();
   },
@@ -217,7 +234,7 @@ const api = {
       : `${API_BASE_URL}/api/v1/analysis/${datasetId}/conflicts`;
     const response = await fetch(url);
     if (!response.ok) {
-      throw new Error(`Failed to load conflicts: ${response.statusText}`);
+      await handleApiError(response, "Failed to load conflicts");
     }
     return response.json();
   },
@@ -225,7 +242,7 @@ const api = {
   async getViolations(datasetId: string): Promise<ViolationsResponse> {
     const response = await fetch(`${API_BASE_URL}/api/v1/analysis/${datasetId}/violations`);
     if (!response.ok) {
-      throw new Error(`Failed to load violations: ${response.statusText}`);
+      await handleApiError(response, "Failed to load violations");
     }
     return response.json();
   },
@@ -233,7 +250,7 @@ const api = {
   async requestCsvReport(datasetId: string): Promise<string> {
     const response = await fetch(`${API_BASE_URL}/api/v1/reports/${datasetId}/summary`);
     if (!response.ok) {
-      throw new Error(`Failed to generate CSV: ${response.statusText}`);
+      await handleApiError(response, "Failed to generate CSV");
     }
     const data = await response.json();
     return data.file_name;
@@ -242,7 +259,7 @@ const api = {
   async requestExcelReport(datasetId: string): Promise<string> {
     const response = await fetch(`${API_BASE_URL}/api/v1/reports/${datasetId}/excel`);
     if (!response.ok) {
-      throw new Error(`Failed to generate Excel: ${response.statusText}`);
+      await handleApiError(response, "Failed to generate Excel");
     }
     const data = await response.json();
     return data.file_name;
@@ -251,7 +268,7 @@ const api = {
   async requestPdfReport(datasetId: string): Promise<string> {
     const response = await fetch(`${API_BASE_URL}/api/v1/reports/${datasetId}/pdf`);
     if (!response.ok) {
-      throw new Error(`Failed to generate PDF: ${response.statusText}`);
+      await handleApiError(response, "Failed to generate PDF");
     }
     const data = await response.json();
     return data.file_name;
@@ -262,9 +279,17 @@ const api = {
       `${API_BASE_URL}/api/v1/reports/${datasetId}/download/${fileName}`
     );
     if (!response.ok) {
-      throw new Error(`Failed to download report: ${response.statusText}`);
+      await handleApiError(response, "Failed to download report");
     }
     return response.blob();
+  },
+
+  async getQcSummary(datasetId: string): Promise<QcSummary> {
+    const response = await fetch(`${API_BASE_URL}/api/v1/analysis/${datasetId}/qc_summary`);
+    if (!response.ok) {
+      await handleApiError(response, "Failed to load QC summary");
+    }
+    return response.json();
   },
 };
 
