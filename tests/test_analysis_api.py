@@ -198,7 +198,7 @@ def test_upload_dataset_creates_normalized(tmp_path, monkeypatch):
     )
     assert response.status_code == 200
     payload = response.json()
-    dataset_id = payload["dataset_id"]
+    dataset_id = payload["id"]
     dataset_dir = data_dir / dataset_id
 
     assert (dataset_dir / "raw.pkl").exists()
@@ -206,6 +206,22 @@ def test_upload_dataset_creates_normalized(tmp_path, monkeypatch):
     metadata = json.loads((dataset_dir / "metadata.json").read_text(encoding="utf-8"))
     assert metadata["tracks"] == 2
     assert metadata["frames"] >= 2
+    assert metadata["id"] == dataset_id
+
+    config_resp = client.get(f"/api/v1/config/view/{dataset_id}")
+    assert config_resp.status_code == 200
+    config_data = config_resp.json()
+    assert config_data["dataset_id"] == dataset_id
+    assert config_data["accesses"] == []
+
+    analysis_resp = client.get(f"/api/v1/config/{dataset_id}/analysis_settings")
+    assert analysis_resp.status_code == 200
+    analysis_data = analysis_resp.json()
+    assert analysis_data["interval_minutes"] == 15
+
+    forbidden_resp = client.get(f"/api/v1/config/{dataset_id}/forbidden_movements")
+    assert forbidden_resp.status_code == 200
+    assert forbidden_resp.json() == []
 
 
 def test_qc_summary_endpoint(api_client):

@@ -44,14 +44,14 @@ npm install
 npm run dev
 ```
 
-El frontend estará disponible en `http://localhost:3000`. La configuración de Vite usa `strictPort: true`, por lo que si el puerto 3000 está ocupado el comando `npm run dev` fallará en lugar de elegir otro puerto; libera el puerto o detén la instancia previa antes de reintentar.
+El frontend estará disponible en `http://localhost:5173`. La configuración de Vite usa `strictPort: true`, por lo que si el puerto 5173 está ocupado el comando `npm run dev` fallará en lugar de elegir otro puerto; libera el puerto o detén la instancia previa antes de reintentar.
 
 ### Scripts de arranque rápido (Windows)
 
 En la raíz del repositorio se incluyen:
 
 - `start_backend.bat`: ejecuta `uvicorn api.main:app --host 0.0.0.0 --port 3004 --reload` usando la virtualenv local.
-- `start_frontend.bat`: lanza `npm run dev` dentro de `apps/web` (puerto fijo 3000).
+- `start_frontend.bat`: lanza `npm run dev -- --host 0.0.0.0 --port 5173` dentro de `apps/web` (puerto fijo 5173).
 - `start_dev.bat`: abre dos consolas nuevas y ejecuta los scripts anteriores en paralelo.
 
 Si alguno de los puertos está ocupado, los comandos mostrarán el error “address already in use” y finalizarán sin cambiarse automáticamente a otro puerto.

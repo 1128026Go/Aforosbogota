@@ -28,6 +28,7 @@ const UploadPage: React.FC<UploadPageProps> = ({ onDatasetCreated }) => {
       setError("Selecciona un archivo primero");
       return;
     }
+    console.log("[UploadPage] Iniciando carga de PKL", file.name);
 
     setUploading(true);
     setError(null);
@@ -35,21 +36,39 @@ const UploadPage: React.FC<UploadPageProps> = ({ onDatasetCreated }) => {
 
     try {
       const data = await api.uploadDataset(file);
-      setSuccess(`PKL procesado exitosamente. Dataset: ${data.dataset_id}`);
+      console.log("[UploadPage] Respuesta completa de upload:", data);
+      const datasetIdResponse =
+        (data as any)?.id ??
+        (data as any)?.dataset_id ??
+        (data as any)?.datasetId ??
+        (data as any)?.metadata?.dataset_id ??
+        (data as any)?.metadata?.datasetId;
+      console.log("[UploadPage] ID extraído:", datasetIdResponse);
+
+      if (!datasetIdResponse) {
+        console.error("[UploadPage] No se pudo extraer un datasetId válido de la respuesta:", data);
+        setError("No se pudo obtener el identificador del dataset desde la respuesta del servidor.");
+        return;
+      }
+
+      setSuccess(`PKL procesado exitosamente. Dataset: ${datasetIdResponse}`);
       setFile(null);
 
       if (onDatasetCreated) {
-        onDatasetCreated(data.dataset_id);
+        onDatasetCreated(datasetIdResponse);
       }
 
       // Auto-navigate after 2 seconds
       setTimeout(() => {
-        navigate(`/datasets/${data.dataset_id}/config`);
+        console.log("[UploadPage] Navegando a config del dataset:", datasetIdResponse);
+        navigate(`/datasets/${datasetIdResponse}/config`);
       }, 2000);
     } catch (err) {
+      console.error("[UploadPage] Error al subir PKL:", err);
       setError(err instanceof Error ? err.message : "Error al subir archivo");
     } finally {
       setUploading(false);
+      console.log("[UploadPage] Finalizó proceso de carga");
     }
   };
 

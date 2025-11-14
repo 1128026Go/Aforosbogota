@@ -39,19 +39,30 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     const match = location.pathname.match(/^\/datasets\/([^/]+)\/(config|results)/);
     const matchedDatasetId = match?.[1];
-    if (matchedDatasetId && matchedDatasetId !== datasetId) {
+    console.log("[App] matchedDatasetId:", matchedDatasetId, "pathname:", location.pathname);
+
+    if (!matchedDatasetId || matchedDatasetId === "undefined") {
+      if (datasetId !== null) {
+        setDatasetId(null);
+      }
+      if (match) {
+        navigate("/datasets/upload", { replace: true });
+      }
+      return;
+    }
+
+    if (matchedDatasetId !== datasetId) {
       setDatasetId(matchedDatasetId);
     }
-    if (!matchedDatasetId && datasetId !== null) {
-      setDatasetId(null);
-    }
-  }, [location, datasetId]);
+  }, [location, datasetId, navigate]);
+
+  const normalizedDatasetId = datasetId && datasetId !== "undefined" ? datasetId : undefined;
 
   return (
     <div className="min-h-screen bg-gray-50">
       <StepNavigation
         currentStep={getCurrentStep()}
-        datasetId={datasetId || undefined}
+        datasetId={normalizedDatasetId}
         onNavigate={handleNavigate}
       />
 

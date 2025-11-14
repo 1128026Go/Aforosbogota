@@ -5,7 +5,7 @@ import {
   DatasetConfig,
   TrajectoryPoint,
   AccessPolygonUpdate,
-  UploadResponse,
+  DatasetSummary,
   DatasetMetadata,
   VolumesResponse,
   SpeedsResponse,
@@ -18,6 +18,14 @@ import {
 } from "@/types";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3004";
+const DATASET_ID_REQUIRED_MSG = "Dataset no seleccionado. Regresa al paso de carga e inténtalo de nuevo.";
+
+const ensureDatasetId = (value: string): string => {
+  if (!value || value === "undefined") {
+    throw new Error(DATASET_ID_REQUIRED_MSG);
+  }
+  return value;
+};
 
 type ApiError = Error & { status?: number; detail?: string };
 
@@ -39,7 +47,7 @@ async function handleApiError(response: Response, fallback: string): Promise<nev
 
 const api = {
   // ========== DATASETS (Step 1: Upload) ==========
-  async uploadDataset(file: File): Promise<UploadResponse> {
+  async uploadDataset(file: File): Promise<DatasetSummary> {
     const formData = new FormData();
     formData.append("file", file);
 
@@ -63,17 +71,18 @@ const api = {
   },
 
   async getDataset(datasetId: string): Promise<DatasetMetadata> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/datasets/${datasetId}`);
+    const validId = ensureDatasetId(datasetId);
+    const response = await fetch(`${API_BASE_URL}/api/v1/datasets/${validId}`);
     if (!response.ok) {
       await handleApiError(response, "Failed to get dataset");
     }
-    const data = await response.json();
-    return data.metadata;
+    return response.json();
   },
 
   // ========== CONFIG (Step 2: Configure Accesses) ==========
   async viewConfig(datasetId: string): Promise<DatasetConfig> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/config/view/${datasetId}`);
+    const validId = ensureDatasetId(datasetId);
+    const response = await fetch(`${API_BASE_URL}/api/v1/config/view/${validId}`);
     if (!response.ok) {
       throw new Error(`Failed to load config: ${response.statusText}`);
     }
@@ -104,8 +113,9 @@ const api = {
       payload.max_samples = options.maxSamples;
     }
 
+    const validId = ensureDatasetId(datasetId);
     const response = await fetch(
-      `${API_BASE_URL}/api/v1/config/${datasetId}/generate_accesses`,
+      `${API_BASE_URL}/api/v1/config/${validId}/generate_accesses`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -122,8 +132,9 @@ const api = {
     datasetId: string,
     update: AccessPolygonUpdate
   ): Promise<DatasetConfig> {
+    const validId = ensureDatasetId(datasetId);
     const response = await fetch(
-      `${API_BASE_URL}/api/v1/config/save_accesses/${datasetId}`,
+      `${API_BASE_URL}/api/v1/config/save_accesses/${validId}`,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -137,8 +148,9 @@ const api = {
   },
 
   async generateRilsaRules(datasetId: string): Promise<DatasetConfig> {
+    const validId = ensureDatasetId(datasetId);
     const response = await fetch(
-      `${API_BASE_URL}/api/v1/config/generate_rilsa/${datasetId}`,
+      `${API_BASE_URL}/api/v1/config/generate_rilsa/${validId}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -151,7 +163,8 @@ const api = {
   },
 
   async getAnalysisSettings(datasetId: string): Promise<AnalysisSettings> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/config/${datasetId}/analysis_settings`);
+    const validId = ensureDatasetId(datasetId);
+    const response = await fetch(`${API_BASE_URL}/api/v1/config/${validId}/analysis_settings`);
     if (!response.ok) {
       await handleApiError(response, "Failed to load analysis settings");
     }
@@ -159,7 +172,8 @@ const api = {
   },
 
   async updateAnalysisSettings(datasetId: string, payload: AnalysisSettings): Promise<AnalysisSettings> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/config/${datasetId}/analysis_settings`, {
+    const validId = ensureDatasetId(datasetId);
+    const response = await fetch(`${API_BASE_URL}/api/v1/config/${validId}/analysis_settings`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -171,7 +185,8 @@ const api = {
   },
 
   async getForbiddenMovements(datasetId: string): Promise<ForbiddenMovement[]> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/config/${datasetId}/forbidden_movements`);
+    const validId = ensureDatasetId(datasetId);
+    const response = await fetch(`${API_BASE_URL}/api/v1/config/${validId}/forbidden_movements`);
     if (!response.ok) {
       await handleApiError(response, "Failed to load forbidden movements");
     }
@@ -182,7 +197,8 @@ const api = {
     datasetId: string,
     payload: ForbiddenMovement[]
   ): Promise<ForbiddenMovement[]> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/config/${datasetId}/forbidden_movements`, {
+    const validId = ensureDatasetId(datasetId);
+    const response = await fetch(`${API_BASE_URL}/api/v1/config/${validId}/forbidden_movements`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -195,7 +211,8 @@ const api = {
 
   // ========== REPORTS ==========
   async getVolumes(datasetId: string): Promise<VolumesResponse> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/analysis/${datasetId}/volumes`);
+    const validId = ensureDatasetId(datasetId);
+    const response = await fetch(`${API_BASE_URL}/api/v1/analysis/${validId}/volumes`);
     if (!response.ok) {
       await handleApiError(response, "Failed to load volumes");
     }
@@ -210,9 +227,10 @@ const api = {
     if (options?.fps) params.append("fps", options.fps.toString());
     if (options?.pixelToMeter) params.append("pixel_to_meter", options.pixelToMeter.toString());
     const query = params.toString();
+    const validId = ensureDatasetId(datasetId);
     const url = query
-      ? `${API_BASE_URL}/api/v1/analysis/${datasetId}/speeds?${query}`
-      : `${API_BASE_URL}/api/v1/analysis/${datasetId}/speeds`;
+      ? `${API_BASE_URL}/api/v1/analysis/${validId}/speeds?${query}`
+      : `${API_BASE_URL}/api/v1/analysis/${validId}/speeds`;
     const response = await fetch(url);
     if (!response.ok) {
       await handleApiError(response, "Failed to load speeds");
@@ -229,9 +247,10 @@ const api = {
     if (options?.ttcThreshold) params.append("ttc_threshold", options.ttcThreshold.toString());
     if (options?.distanceThreshold) params.append("distance_threshold", options.distanceThreshold.toString());
     const query = params.toString();
+    const validId = ensureDatasetId(datasetId);
     const url = query
-      ? `${API_BASE_URL}/api/v1/analysis/${datasetId}/conflicts?${query}`
-      : `${API_BASE_URL}/api/v1/analysis/${datasetId}/conflicts`;
+      ? `${API_BASE_URL}/api/v1/analysis/${validId}/conflicts?${query}`
+      : `${API_BASE_URL}/api/v1/analysis/${validId}/conflicts`;
     const response = await fetch(url);
     if (!response.ok) {
       await handleApiError(response, "Failed to load conflicts");
@@ -240,7 +259,8 @@ const api = {
   },
 
   async getViolations(datasetId: string): Promise<ViolationsResponse> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/analysis/${datasetId}/violations`);
+    const validId = ensureDatasetId(datasetId);
+    const response = await fetch(`${API_BASE_URL}/api/v1/analysis/${validId}/violations`);
     if (!response.ok) {
       await handleApiError(response, "Failed to load violations");
     }
@@ -248,7 +268,8 @@ const api = {
   },
 
   async requestCsvReport(datasetId: string): Promise<string> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/reports/${datasetId}/summary`);
+    const validId = ensureDatasetId(datasetId);
+    const response = await fetch(`${API_BASE_URL}/api/v1/reports/${validId}/summary`);
     if (!response.ok) {
       await handleApiError(response, "Failed to generate CSV");
     }
@@ -257,7 +278,8 @@ const api = {
   },
 
   async requestExcelReport(datasetId: string): Promise<string> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/reports/${datasetId}/excel`);
+    const validId = ensureDatasetId(datasetId);
+    const response = await fetch(`${API_BASE_URL}/api/v1/reports/${validId}/excel`);
     if (!response.ok) {
       await handleApiError(response, "Failed to generate Excel");
     }
@@ -266,7 +288,8 @@ const api = {
   },
 
   async requestPdfReport(datasetId: string): Promise<string> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/reports/${datasetId}/pdf`);
+    const validId = ensureDatasetId(datasetId);
+    const response = await fetch(`${API_BASE_URL}/api/v1/reports/${validId}/pdf`);
     if (!response.ok) {
       await handleApiError(response, "Failed to generate PDF");
     }
@@ -275,8 +298,9 @@ const api = {
   },
 
   async downloadReport(datasetId: string, fileName: string): Promise<Blob> {
+    const validId = ensureDatasetId(datasetId);
     const response = await fetch(
-      `${API_BASE_URL}/api/v1/reports/${datasetId}/download/${fileName}`
+      `${API_BASE_URL}/api/v1/reports/${validId}/download/${fileName}`
     );
     if (!response.ok) {
       await handleApiError(response, "Failed to download report");
@@ -285,7 +309,8 @@ const api = {
   },
 
   async getQcSummary(datasetId: string): Promise<QcSummary> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/analysis/${datasetId}/qc_summary`);
+    const validId = ensureDatasetId(datasetId);
+    const response = await fetch(`${API_BASE_URL}/api/v1/analysis/${validId}/qc_summary`);
     if (!response.ok) {
       await handleApiError(response, "Failed to load QC summary");
     }

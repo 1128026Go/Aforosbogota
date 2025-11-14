@@ -4,6 +4,7 @@ Router for dataset configuration endpoints
 from fastapi import APIRouter, HTTPException, Body
 from typing import List, Optional
 import json
+from pathlib import Path
 
 import pandas as pd
 from pydantic import BaseModel
@@ -25,7 +26,7 @@ from api.services.analysis_settings import (
     save_analysis_settings,
 )
 from api.services.persistence import ConfigPersistenceService
-from api.routers.datasets import _dataset_dir
+from api.routers.datasets import DATA_DIR
 
 router = APIRouter(
     prefix="/api/v1/config",
@@ -42,6 +43,33 @@ class GenerateAccessesPayload(BaseModel):
     max_samples: Optional[int] = None
 
 
+def _dataset_path(dataset_id: str) -> Path:
+    return DATA_DIR / dataset_id
+
+
+def _ensure_dataset_exists(dataset_id: str) -> Path:
+    dataset_dir = _dataset_path(dataset_id)
+    if not dataset_dir.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Dataset {dataset_id} no existe. Sube el PKL antes de configurar.",
+        )
+    return dataset_dir
+
+
+def _get_or_create_config(dataset_id: str) -> DatasetConfig:
+    _ensure_dataset_exists(dataset_id)
+    config = ConfigPersistenceService.load_config(dataset_id)
+    if config is None:
+        config = ConfigPersistenceService.create_default_config(dataset_id)
+        if not ConfigPersistenceService.save_config(config):
+            raise HTTPException(
+                status_code=500,
+                detail=f"No se pudo inicializar la configuración para {dataset_id}",
+            )
+    return config
+
+
 @router.get("/view/{dataset_id}", response_model=DatasetConfig)
 async def view_config(dataset_id: str):
     """
@@ -50,12 +78,7 @@ async def view_config(dataset_id: str):
     Returns accesses with polygons and RILSA rules.
     If no config exists, returns a new empty configuration.
     """
-    config = ConfigPersistenceService.load_config(dataset_id)
-    
-    if config is None:
-        config = ConfigPersistenceService.create_default_config(dataset_id)
-    
-    return config
+    return _get_or_create_config(dataset_id)
 
 
 @router.get("/{dataset_id}/analysis_settings", response_model=AnalysisSettings)
@@ -63,6 +86,7 @@ async def get_analysis_settings(dataset_id: str) -> AnalysisSettings:
     """
     Obtiene la configuración avanzada de análisis para el dataset.
     """
+    _ensure_dataset_exists(dataset_id)
     return load_analysis_settings(dataset_id)
 
 
@@ -73,6 +97,7 @@ async def update_analysis_settings(
     """
     Actualiza y persiste la configuración avanzada de análisis.
     """
+    _ensure_dataset_exists(dataset_id)
     save_analysis_settings(dataset_id, settings)
     return settings
 
@@ -84,9 +109,7 @@ async def get_forbidden_movements(dataset_id: str) -> List[ForbiddenMovement]:
     """
     Devuelve la lista de movimientos RILSA prohibidos para el dataset.
     """
-    config = ConfigPersistenceService.load_config(dataset_id)
-    if config is None:
-        return []
+    config = _get_or_create_config(dataset_id)
     return config.forbidden_movements
 
 
@@ -99,9 +122,7 @@ async def update_forbidden_movements(
     """
     Define la lista de movimientos RILSA prohibidos para el dataset.
     """
-    config = ConfigPersistenceService.load_config(dataset_id)
-    if config is None:
-        config = ConfigPersistenceService.create_default_config(dataset_id)
+    config = _get_or_create_config(dataset_id)
     config.forbidden_movements = movements
     if not ConfigPersistenceService.save_config(config):
         raise HTTPException(
@@ -122,7 +143,7 @@ async def generate_accesses(
     Si no se proporcionan trayectorias explícitas, el servicio intentará cargar
     el archivo `normalized.parquet` del dataset para analizar los puntos.
     """
-    dataset_dir = _dataset_dir(dataset_id)
+    dataset_dir = _ensure_dataset_exists(dataset_id)
     normalized_path = dataset_dir / "normalized.parquet"
     metadata_path = dataset_dir / "metadata.json"
 
@@ -234,9 +255,7 @@ async def save_accesses(dataset_id: str, update: AccessPolygonUpdate):
         Updated DatasetConfig
     """
     # Load existing config or create new one
-    config = ConfigPersistenceService.load_config(dataset_id)
-    if config is None:
-        config = ConfigPersistenceService.create_default_config(dataset_id)
+    config = _get_or_create_config(dataset_id)
     
     # Update accesses
     config.accesses = update.accesses
@@ -267,12 +286,7 @@ async def generate_rilsa_rules(dataset_id: str):
         Updated DatasetConfig with generated RILSA rules
     """
     # Load existing config
-    config = ConfigPersistenceService.load_config(dataset_id)
-    if config is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Configuration not found for dataset {dataset_id}"
-        )
+    config = _get_or_create_config(dataset_id)
     
     # Check if we have accesses defined
     if not config.accesses:
@@ -303,13 +317,7 @@ async def get_rilsa_codes(dataset_id: str):
     
     Returns the complete list of movement codes and descriptions.
     """
-    config = ConfigPersistenceService.load_config(dataset_id)
-    if config is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Configuration not found for dataset {dataset_id}"
-        )
-    
+    config = _get_or_create_config(dataset_id)
     return config.rilsa_rules
 
 
@@ -318,6 +326,7 @@ async def reset_config(dataset_id: str):
     """
     Reset configuration to default (empty accesses and rules).
     """
+    _ensure_dataset_exists(dataset_id)
     config = ConfigPersistenceService.create_default_config(dataset_id)
     
     if not ConfigPersistenceService.save_config(config):

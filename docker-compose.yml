@@ -23,7 +23,7 @@ services:
       context: ./apps/web
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "5173:5173"
     environment:
       - REACT_APP_API_URL=http://localhost:3004
       - VITE_API_URL=http://localhost:3004
@@ -32,7 +32,7 @@ services:
     volumes:
       - ./apps/web/src:/app/src
       - ./apps/web/public:/app/public
-    command: npm run dev -- --host 0.0.0.0
+    command: npm run dev -- --host 0.0.0.0 --port 5173
     networks:
       - aforos-network
 

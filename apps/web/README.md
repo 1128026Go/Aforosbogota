@@ -28,7 +28,7 @@ npm install
 npm run dev
 ```
 
-La aplicación estará disponible en `http://localhost:3000`
+La aplicación estará disponible en `http://localhost:5173`
 
 Asegúrate de que la API está corriendo en `http://localhost:3004`
 

@@ -77,10 +77,17 @@ export interface DatasetMetadata {
   status?: "processing" | "ready" | "error";
 }
 
-export interface UploadResponse {
-  dataset_id: string;
-  metadata: DatasetMetadata;
-  status: string;
+export interface DatasetSummary {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string | null;
+  frames: number;
+  tracks: number;
+  width: number;
+  height: number;
+  fps?: number;
+  status?: "processing" | "ready" | "error";
 }
 
 // ========== ANALYSIS RESPONSES ==========

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import api from "@/lib/api";
 import {
   AnalysisSettings,
@@ -78,6 +78,9 @@ const DEFAULT_SETTINGS: AnalysisSettings = {
   ttc_threshold_s: 1.5,
 };
 
+const sanitizeDatasetId = (value?: string | null) =>
+  value && value !== "undefined" ? value : undefined;
+
 const formatNumber = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 2,
 });
@@ -108,7 +111,15 @@ const parseForbiddenInput = (raw: string): ForbiddenMovement[] => {
 };
 
 const ResultsPage: React.FC = () => {
-  const { datasetId } = useParams<{ datasetId: string }>();
+  const navigate = useNavigate();
+  const { datasetId: routeDatasetId } = useParams<{ datasetId: string }>();
+  const datasetId = sanitizeDatasetId(routeDatasetId);
+  useEffect(() => {
+    if (!datasetId) {
+      navigate("/datasets/upload", { replace: true });
+    }
+  }, [datasetId, navigate]);
+
   const [activeTab, setActiveTab] = useState<TabId>("volumes");
   const [analysisSettings, setAnalysisSettings] = useState<AnalysisSettings | null>(null);
   const [settingsDraft, setSettingsDraft] = useState<AnalysisSettings | null>(null);

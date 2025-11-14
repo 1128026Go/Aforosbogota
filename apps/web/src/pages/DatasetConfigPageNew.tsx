@@ -26,13 +26,16 @@ const STEPS = [
   { id: 3, name: "Resumen", description: "Guardar" },
 ];
 
+const sanitizeDatasetId = (value?: string | null) =>
+  value && value !== "undefined" ? value : undefined;
+
 const DatasetConfigPageNew: React.FC<DatasetConfigPageProps> = ({
   datasetId: propDatasetId,
   onClose,
 }) => {
   const navigate = useNavigate();
   const { datasetId: routeDatasetId } = useParams<{ datasetId: string }>();
-  const datasetId = propDatasetId || routeDatasetId;
+  const datasetId = sanitizeDatasetId(propDatasetId) ?? sanitizeDatasetId(routeDatasetId);
 
   const [currentStep, setCurrentStep] = useState(1);
   const [config, setConfig] = useState<DatasetConfig | null>(null);
@@ -51,10 +54,15 @@ const DatasetConfigPageNew: React.FC<DatasetConfigPageProps> = ({
   useEffect(() => {
     if (!datasetId) {
       setError("Dataset no especificado. Regresa al paso de carga y selecciona un archivo.");
+      setConfig(null);
+      setAnalysisSettings(null);
+      setForbiddenMovements([]);
+      setMetadata(null);
+      navigate("/datasets/upload", { replace: true });
       return;
     }
     loadConfig(datasetId);
-  }, [datasetId]);
+  }, [datasetId, navigate]);
 
   useEffect(() => {
     if (config && config.accesses.length > 0) {
